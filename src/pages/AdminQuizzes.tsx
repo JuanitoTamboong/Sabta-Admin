@@ -19,6 +19,7 @@ export default function AdminQuizzes() {
   const [category, setCategory] = useState('General Knowledge')
   const [difficulty, setDifficulty] = useState('normal')
   const [ageCategory, setAgeCategory] = useState('teens')
+  const [manualTimer, setManualTimer] = useState(15)
   const [qText, setQText] = useState('')
   const [optA, setOptA] = useState('')
   const [optB, setOptB] = useState('')
@@ -30,12 +31,16 @@ export default function AdminQuizzes() {
   // Upload State
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
+  
+  // ✅ NEW: Store the file in state instead of uploading immediately
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Upload Settings State
   const [uploadCategory, setUploadCategory] = useState('General Knowledge')
   const [uploadDifficulty, setUploadDifficulty] = useState('normal')
   const [uploadAgeCategory, setUploadAgeCategory] = useState('teens')
+  const [uploadTimer, setUploadTimer] = useState(15)
 
   const fetchQuizzes = async () => {
     const { data } = await supabase.from('quizzes').select('*, questions(count)').order('created_at', { ascending: false })
@@ -54,7 +59,12 @@ export default function AdminQuizzes() {
     
     try {
       const { data: quizData, error: quizError } = await supabase.from('quizzes').insert({
-        title: autoTitle, category, difficulty, age_category: ageCategory, status: 'published', time_limit_seconds: 15
+        title: autoTitle, 
+        category, 
+        difficulty, 
+        age_category: ageCategory, 
+        status: 'published', 
+        time_limit_seconds: manualTimer 
       }).select().single()
       if (quizError) throw quizError
 
@@ -77,10 +87,18 @@ export default function AdminQuizzes() {
     }
   }
 
-  // --- MULTIPLE TEXT FILE PARSER HANDLER ---
-  const handleTextUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ NEW: Handle file selection WITHOUT uploading
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (file) {
+      setSelectedFile(file)
+      setUploadStatus(null) // Clear previous status
+    }
+  }
+
+  // ✅ NEW: Actual upload function triggered by the button
+  const handleProcessUpload = async () => {
+    if (!selectedFile) return
 
     setUploading(true)
     setUploadStatus(null)
@@ -90,23 +108,25 @@ export default function AdminQuizzes() {
       try {
         const text = event.target?.result as string
         
-        const quizBlocks = text.split(/Quiz \d+:/i)
-        const validQuizBlocks = quizBlocks.filter(block => block.trim().length > 0)
+        // ✅ FIXED PARSER: Split by "Quiz X:" but keep the "Quiz X:" text in the block
+        const quizBlocks = text.split(/(?=Quiz \d+:)/i).filter(block => block.trim().length > 0)
 
         let totalQuestionsAdded = 0
         let totalQuizzesAdded = 0
 
-        for (let i = 0; i < validQuizBlocks.length; i++) {
-          const blockText = validQuizBlocks[i]
+        for (let i = 0; i < quizBlocks.length; i++) {
+          const blockText = quizBlocks[i]
           
-          const questionBlocks = blockText.split(/Question \d+:/).filter(b => b.trim() !== '')
+          // Find all questions in this block
+          const questionBlocks = blockText.split(/(?=Question \d+:)/i).filter(b => b.trim() !== '')
           const parsedQuestions = []
 
           for (const qBlock of questionBlocks) {
             const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
             if (lines.length === 0) continue
 
-            const question_text = lines[0]
+            // The first line contains "Question X: [Text]". We remove "Question X:" to get just the text.
+            const question_text = lines[0].replace(/^Question \d+:\s*/i, '').trim()
             
             const options = lines
               .filter(l => /^[A-D]\./.test(l))
@@ -127,10 +147,16 @@ export default function AdminQuizzes() {
           }
 
           if (parsedQuestions.length > 0) {
-            const autoTitle = `${uploadCategory} Quiz - ${new Date().toLocaleDateString()}`
+            // ✅ FIX: Titles are sequential
+            const autoTitle = `${uploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
             
             const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
-              title: autoTitle, category: uploadCategory, difficulty: uploadDifficulty, age_category: uploadAgeCategory, status: 'published', time_limit_seconds: 15
+              title: autoTitle, 
+              category: uploadCategory, 
+              difficulty: uploadDifficulty, 
+              age_category: uploadAgeCategory, 
+              status: 'published', 
+              time_limit_seconds: uploadTimer
             }).select().single()
 
             if (quizErr) throw quizErr
@@ -160,15 +186,19 @@ export default function AdminQuizzes() {
           type: 'success', 
           msg: `Successfully imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} total questions!` 
         })
+        
+        // Reset file input after success
+        setSelectedFile(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        
         fetchQuizzes()
       } catch (err: any) {
         setUploadStatus({ type: 'error', msg: err.message || 'Failed to parse document.' })
       } finally {
         setUploading(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
       }
     }
-    reader.readAsText(file)
+    reader.readAsText(selectedFile)
   }
 
   const handleDeleteQuiz = async (id: string) => {
@@ -342,7 +372,7 @@ export default function AdminQuizzes() {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div>
               <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Category</label>
               <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition">
@@ -360,6 +390,17 @@ export default function AdminQuizzes() {
               <select value={ageCategory} onChange={e => setAgeCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition">
                 <option value="kids">Kids</option><option value="teens">Teens</option><option value="adults">Adults</option>
               </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Timer (Seconds)</label>
+              <input 
+                type="number" 
+                min="5" 
+                max="120" 
+                value={manualTimer} 
+                onChange={e => setManualTimer(parseInt(e.target.value))} 
+                className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" 
+              />
             </div>
           </div>
 
@@ -438,7 +479,8 @@ export default function AdminQuizzes() {
                       <option>General Knowledge</option><option>Science</option><option>Mathematics</option><option>History</option>
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Difficulty</label>
                       <select value={uploadDifficulty} onChange={e => setUploadDifficulty(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]">
@@ -451,29 +493,64 @@ export default function AdminQuizzes() {
                         <option value="kids">Kids</option><option value="teens">Teens</option><option value="adults">Adults</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Timer (Sec)</label>
+                      <input 
+                        type="number" 
+                        min="5" 
+                        max="120" 
+                        value={uploadTimer} 
+                        onChange={e => setUploadTimer(parseInt(e.target.value))} 
+                        className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]" 
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <input type="file" accept=".txt" ref={fileInputRef} onChange={handleTextUpload} className="hidden" id="text-upload" />
+              {/* ✅ CHANGED: File Input now just selects the file */}
+              <input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="text-upload" />
               
               <label 
                 htmlFor="text-upload" 
-                className={`cursor-pointer flex flex-col items-center justify-center w-full py-12 px-4 border-2 border-dashed rounded-3xl transition-all ${
-                  uploading 
-                    ? 'border-gray-700 bg-gray-800/20 text-gray-500 cursor-not-allowed' 
+                className={`cursor-pointer flex flex-col items-center justify-center w-full py-10 px-4 border-2 border-dashed rounded-3xl transition-all ${
+                  selectedFile 
+                    ? 'border-green-500/50 bg-green-500/5 text-green-400' 
                     : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
                 }`}
               >
-                <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center mb-4">
-                  {uploading ? <ClockIcon size={32} className="animate-spin" /> : <UploadSimpleIcon size={32} />}
+                <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center mb-3">
+                  {selectedFile ? <CheckCircleIcon size={28} /> : <UploadSimpleIcon size={28} />}
                 </div>
-                <h3 className="font-bold text-lg mb-1">{uploading ? 'Processing File...' : 'Click to upload .txt file'}</h3>
-                <p className="text-xs text-gray-400">Multiple quizzes are supported.</p>
+                <h3 className="font-bold text-base mb-1">
+                  {selectedFile ? selectedFile.name : 'Click to select .txt file'}
+                </h3>
+                <p className="text-xs text-gray-400">
+                  {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Multiple quizzes are supported.'}
+                </p>
               </label>
 
+              {/* ✅ NEW: The Upload Button */}
+              {selectedFile && (
+                <button 
+                  onClick={handleProcessUpload}
+                  disabled={uploading}
+                  className={`mt-4 w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition ${
+                    uploading 
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                      : 'bg-[#ff00a0] text-black hover:bg-white'
+                  }`}
+                >
+                  {uploading ? (
+                    <><ClockIcon size={20} className="animate-spin" /> Processing...</>
+                  ) : (
+                    <><UploadSimpleIcon size={20} weight="bold" /> Upload Now</>
+                  )}
+                </button>
+              )}
+
               {uploadStatus && (
-                <div className={`mt-6 p-4 rounded-xl border flex items-center gap-3 text-left ${
+                <div className={`mt-4 p-4 rounded-xl border flex items-center gap-3 text-left ${
                   uploadStatus.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
                 }`}>
                   {uploadStatus.type === 'success' ? <CheckCircleIcon size={24} weight="fill" /> : <XCircleIcon size={24} weight="fill" />}
