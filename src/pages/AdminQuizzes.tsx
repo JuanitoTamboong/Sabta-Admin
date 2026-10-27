@@ -32,7 +32,6 @@ export default function AdminQuizzes() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   
-  // ✅ NEW: Store the file in state instead of uploading immediately
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -87,16 +86,16 @@ export default function AdminQuizzes() {
     }
   }
 
-  // ✅ NEW: Handle file selection WITHOUT uploading
+  // Handle file selection WITHOUT uploading
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setSelectedFile(file)
-      setUploadStatus(null) // Clear previous status
+      setUploadStatus(null) 
     }
   }
 
-  // ✅ NEW: Actual upload function triggered by the button
+  // Actual upload function triggered by the button
   const handleProcessUpload = async () => {
     if (!selectedFile) return
 
@@ -108,8 +107,8 @@ export default function AdminQuizzes() {
       try {
         const text = event.target?.result as string
         
-        // ✅ FIXED PARSER: Split by "Quiz X:" but keep the "Quiz X:" text in the block
-        const quizBlocks = text.split(/(?=Quiz \d+:)/i).filter(block => block.trim().length > 0)
+        // ✅ FIXED: Support both English ("Quiz") and Tagalog ("Pagsusulit")
+        const quizBlocks = text.split(/(?=(?:Quiz|Pagsusulit) \d+:)/i).filter(block => block.trim().length > 0)
 
         let totalQuestionsAdded = 0
         let totalQuizzesAdded = 0
@@ -117,16 +116,16 @@ export default function AdminQuizzes() {
         for (let i = 0; i < quizBlocks.length; i++) {
           const blockText = quizBlocks[i]
           
-          // Find all questions in this block
-          const questionBlocks = blockText.split(/(?=Question \d+:)/i).filter(b => b.trim() !== '')
+          // ✅ FIXED: Support both English ("Question") and Tagalog ("Tanong")
+          const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
           const parsedQuestions = []
 
           for (const qBlock of questionBlocks) {
             const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
             if (lines.length === 0) continue
 
-            // The first line contains "Question X: [Text]". We remove "Question X:" to get just the text.
-            const question_text = lines[0].replace(/^Question \d+:\s*/i, '').trim()
+            // ✅ FIXED: Remove both "Question X:" and "Tanong X:"
+            const question_text = lines[0].replace(/^(?:Question|Tanong) \d+:\s*/i, '').trim()
             
             const options = lines
               .filter(l => /^[A-D]\./.test(l))
@@ -135,7 +134,8 @@ export default function AdminQuizzes() {
             const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
             const hint = hintLine ? hintLine.substring(5).trim() : null
 
-            const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:'))
+            // ✅ FIXED: Support both English ("Answer") and Tagalog ("Sagot")
+            const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:') || l.toLowerCase().startsWith('sagot:'))
             const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
             
             const letterIndex = answerLetter.charCodeAt(0) - 65 
@@ -147,7 +147,6 @@ export default function AdminQuizzes() {
           }
 
           if (parsedQuestions.length > 0) {
-            // ✅ FIX: Titles are sequential
             const autoTitle = `${uploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
             
             const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
@@ -187,7 +186,6 @@ export default function AdminQuizzes() {
           msg: `Successfully imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} total questions!` 
         })
         
-        // Reset file input after success
         setSelectedFile(null)
         if (fileInputRef.current) fileInputRef.current.value = ''
         
@@ -508,7 +506,6 @@ export default function AdminQuizzes() {
                 </div>
               </div>
 
-              {/* ✅ CHANGED: File Input now just selects the file */}
               <input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="text-upload" />
               
               <label 
@@ -530,7 +527,6 @@ export default function AdminQuizzes() {
                 </p>
               </label>
 
-              {/* ✅ NEW: The Upload Button */}
               {selectedFile && (
                 <button 
                   onClick={handleProcessUpload}
@@ -598,7 +594,17 @@ B. 4
 C. 5
 D. 6
 Hint: Basic addition.
-Answer: B`}
+Answer: B
+
+(Pwede rin Tagalog)
+Pagsusulit 3:
+Tanong 1: Ano ang ating ginagamit sa paghinga?
+A. Tubig
+B. Hangin
+C. Lupa
+D. Apoy
+Hint: Isipin ang hangin.
+Sagot: B`}
                 </pre>
               </div>
             </div>
