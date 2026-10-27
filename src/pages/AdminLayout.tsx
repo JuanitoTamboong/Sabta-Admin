@@ -1,9 +1,20 @@
+// src/pages/AdminLayout.tsx
 import { useEffect, useState } from 'react'
-import { useNavigate, Outlet, Link, useLocation } from 'react-router-dom'
-// FIXED: Changed from '../../lib/supabase' to '../lib/supabase'
-import { supabase } from '../lib/supabase' 
-// FIXED: Removed UsersIcon and GiftIcon to clear the TypeScript warning
-import { ChartBarIcon, FileTextIcon, SignOutIcon, ShieldCheckIcon } from '@phosphor-icons/react'
+import { useNavigate, useLocation, Outlet } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import {
+  SquaresFourIcon, BookOpenIcon, UsersIcon, ChartLineUpIcon,
+  GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon
+} from '@phosphor-icons/react'
+import sabtaLogo from '../assets/icons/sabta-logo.png'
+
+const NAV_ITEMS = [
+  { path: '/admin/dashboard', label: 'Dashboard', icon: SquaresFourIcon },
+  { path: '/admin/quizzes', label: 'Quizzes', icon: BookOpenIcon },
+  { path: '/admin/users', label: 'Players', icon: UsersIcon },
+  { path: '/admin/analytics', label: 'Analytics', icon: ChartLineUpIcon },
+  { path: '/admin/cosmetics', label: 'Cosmetics', icon: GiftIcon },
+]
 
 export default function AdminLayout() {
   const navigate = useNavigate()
@@ -14,15 +25,14 @@ export default function AdminLayout() {
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return navigate('/')
+      if (!user) return navigate('/admin/login')
 
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       
-      // Security Check: Ensure they are an admin
       if (data?.role !== 'admin') {
-        return navigate('/') // Kick out normal players back to login
+        await supabase.auth.signOut()
+        return navigate('/admin/login')
       }
-
       setProfile(data)
       setLoading(false)
     }
@@ -31,80 +41,83 @@ export default function AdminLayout() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    navigate('/')
+    navigate('/admin/login')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#050505] text-[#ccff00] flex items-center justify-center font-mono">
-        VERIFYING CLEARANCE...
-      </div>
-    )
-  }
+  // Determine the current page title based on the route
+  const currentTitle = NAV_ITEMS.find(item => location.pathname.startsWith(item.path))?.label || 'Dashboard'
 
-  const navItems = [
-    { path: '/admin', label: 'Analytics', icon: ChartBarIcon },
-    { path: '/admin/quizzes', label: 'Quiz Manager', icon: FileTextIcon },
-  ]
+  if (loading) return <div className="min-h-screen bg-[#050505] text-[#ccff00] flex items-center justify-center font-mono">VERIFYING CLEARANCE...</div>
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex">
+    <div className="min-h-screen bg-[#050505] text-white flex font-sans">
       
-      {/* SIDEBAR */}
-      <aside className="w-64 border-r border-red-500/20 bg-[#0a0505] flex flex-col items-start py-8 px-4 gap-4 fixed h-full z-20">
-        <div className="flex items-center gap-3 mb-8 px-4">
-          <div className="w-10 h-10 bg-red-500/20 border border-red-500/50 rounded-xl flex items-center justify-center">
-             <ShieldCheckIcon weight="fill" className="text-red-500 w-6 h-6" />
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden lg:flex w-64 border-r border-white/10 bg-[#0a0b0f] flex-col py-6 px-3 fixed h-full z-30">
+        <div className="flex items-center gap-3 mb-8 px-3 cursor-pointer" onClick={() => navigate('/admin/dashboard')}>
+          <div className="w-10 h-10 bg-[#ccff00]/10 border border-[#ccff00]/30 rounded-xl flex items-center justify-center overflow-hidden">
+            <img src={sabtaLogo} alt="SabTa" className="w-8 h-8 object-contain" />
           </div>
           <div>
-            <span className="block text-xl font-bold tracking-tighter text-white">SABTA</span>
-            <span className="block text-[10px] text-red-400 font-mono tracking-widest">ADMIN PORTAL</span>
+            <span className="text-xl font-bold tracking-tighter block leading-none text-white">SAB<span className="text-[#ccff00]">TA</span></span>
+            <span className="text-[9px] text-[#ff00a0] font-bold tracking-[0.2em] uppercase">Admin Panel</span>
           </div>
         </div>
 
-        <nav className="flex flex-col w-full gap-2">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path
+        <nav className="flex flex-col gap-1">
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname.startsWith(item.path)
+            const Icon = item.icon
             return (
-              <Link 
-                key={item.path} 
-                to={item.path} 
-                className={`flex items-center gap-4 w-full p-3 rounded-xl transition ${
-                  isActive 
-                    ? 'bg-red-500/20 text-red-400 font-bold border border-red-500/20' 
-                    : 'text-gray-400 hover:bg-white/5 hover:text-white font-semibold'
-                }`}
-              >
-                <item.icon weight={isActive ? "fill" : "regular"} className="w-6 h-6" /> 
+              <button key={item.path} onClick={() => navigate(item.path)} className={`flex items-center gap-3 w-full p-3 rounded-xl font-semibold text-sm transition ${isActive ? 'bg-[#ccff00]/10 text-[#ccff00] border border-[#ccff00]/20' : 'text-gray-400 hover:bg-white/5 hover:text-white border border-transparent'}`}>
+                <Icon weight={isActive ? 'fill' : 'duotone'} className="w-5 h-5" />
                 {item.label}
-              </Link>
+              </button>
             )
           })}
         </nav>
 
-        <div className="mt-auto w-full">
-          <button 
-            onClick={handleLogout} 
-            className="flex items-center gap-4 w-full p-3 rounded-xl text-red-400 hover:bg-red-500/10 font-semibold transition"
-          >
-            <SignOutIcon weight="fill" className="w-6 h-6" /> Exit Admin
+        <div className="mt-6 mx-1 p-3 bg-gradient-to-br from-[#00f0ff]/10 to-transparent border border-[#00f0ff]/20 rounded-xl">
+          <div className="flex items-center gap-2 mb-1">
+            <ShieldCheckIcon weight="fill" className="text-[#00f0ff] w-4 h-4" />
+            <span className="text-[10px] font-bold text-[#00f0ff] uppercase tracking-wider">Admin Access</span>
+          </div>
+          <p className="text-[10px] text-gray-500">Full system control enabled</p>
+        </div>
+
+        <div className="mt-auto">
+          <button onClick={handleLogout} className="flex items-center gap-3 w-full p-3 rounded-xl text-red-400 hover:bg-red-500/10 font-semibold text-sm transition">
+            <SignOutIcon weight="fill" className="w-5 h-5" /> Logout
           </button>
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 ml-64 p-8 relative overflow-hidden bg-[#050505]">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-red-500/5 rounded-full blur-[120px] pointer-events-none" />
-        
-        <header className="flex justify-between items-center mb-10 relative z-10 pb-4 border-b border-white/10">
-          <div>
-            <h1 className="text-2xl font-bold">System Administrator</h1>
-            <p className="text-gray-400 text-sm">Logged in as {profile?.display_name}</p>
+      {/* MAIN AREA */}
+      <main className="flex-1 lg:ml-64 pb-24 lg:pb-0">
+        <header className="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-md border-b border-white/10 px-4 lg:px-8 py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-lg lg:text-2xl font-bold leading-tight text-white">{currentTitle}</h1>
+              <p className="text-xs text-gray-500">System Administrator • {profile?.display_name}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="relative p-2 bg-[#0f1014] border border-white/10 rounded-xl hover:bg-white/5 transition">
+                <BellIcon weight="duotone" className="w-5 h-5 text-gray-300" />
+                <span className="absolute top-1 right-1 w-2 h-2 bg-[#ff00a0] rounded-full animate-pulse" />
+              </button>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff00a0] to-purple-600 border-2 border-white/20 flex items-center justify-center font-bold text-black text-sm">
+                A
+              </div>
+            </div>
           </div>
         </header>
 
-        <div className="relative z-10">
-          <Outlet />
+        <div className="p-4 lg:p-8 relative">
+          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#00f0ff]/5 rounded-full blur-[120px] pointer-events-none" />
+          <div className="relative z-10">
+            {/* THIS IS WHERE CHILD ROUTES RENDER */}
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>
