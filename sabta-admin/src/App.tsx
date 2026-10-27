@@ -1,121 +1,81 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+// src/App.tsx
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
 
-function App() {
-  const [count, setCount] = useState(0)
+// Notice the paths are just './pages/...' now, NOT './pages/admin/...'
+import AdminLayout from './pages/AdminLayout'
+import AdminAnalytics from './pages/AdminAnalytics'
+import AdminQuizzes from './pages/AdminQuizzes'
+
+function AdminLogin() {
+  const [loading, setLoading] = useState(false)
+
+  const handleLogin = async () => {
+    setLoading(true)
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    })
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
+    <div className="min-h-screen flex items-center justify-center bg-[#050505]">
+      <div className="bg-[#0f1014] p-10 rounded-3xl border border-white/10 text-center max-w-sm w-full">
+        <h1 className="text-2xl font-bold mb-2 text-white">SabTa Admin</h1>
+        <p className="text-gray-400 mb-6 text-sm">Restricted access. Please sign in with your authorized Google account.</p>
+        <button 
+          onClick={handleLogin} 
+          disabled={loading}
+          className="w-full bg-white text-black py-3 rounded-xl font-bold hover:bg-gray-200 transition"
         >
-          Count is {count}
+          {loading ? 'Connecting...' : 'Sign in with Google'}
         </button>
-      </section>
+      </div>
+    </div>
+  )
+}
 
-      <div className="ticks"></div>
+function App() {
+  const [session, setSession] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050505] text-red-500 flex items-center justify-center font-mono">
+        LOADING...
+      </div>
+    )
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* If not logged in, show Admin Login */}
+        <Route path="/" element={!session ? <AdminLogin /> : <Navigate to="/admin" />} />
+
+        {/* Protected Admin Routes */}
+        <Route path="/admin" element={session ? <AdminLayout /> : <Navigate to="/" />}>
+          <Route index element={<AdminAnalytics />} />
+          <Route path="quizzes" element={<AdminQuizzes />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
