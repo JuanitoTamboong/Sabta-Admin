@@ -1,17 +1,17 @@
 // src/AdminApp.tsx
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 
 import AdminLogin from './pages/AdminLogin'
-import AdminDashboard from './pages/AdminDasboard' // FIXED: Corrected spelling from Dasboard
+import AdminDashboard from './pages/AdminDasboard' // Fixed spelling based on your code
 import AdminQuizzes from './pages/AdminQuizzes'
 import AdminAnalytics from './pages/AdminAnalytics'
 import AdminLayout from './pages/AdminLayout'
 
-// Placeholder pages for now (They will be wrapped in the Layout automatically)
-const AdminPlayers = () => <div className="text-gray-400">Player Management Coming Soon</div>
-const AdminCosmetics = () => <div className="text-gray-400">Cosmetics Coming Soon</div>
+// ✅ IMPORT THE REAL PAGES HERE
+import AdminPlayers from './pages/AdminPlayers'
+import AdminCosmetics from './pages/AdminCosmetics' // ✅ Added Cosmetics Import
 
 export default function AdminApp() {
   const [session, setSession] = useState<any>(null)
