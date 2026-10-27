@@ -12,7 +12,6 @@ export default function AdminQuizzes() {
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'upload'>('list')
   
   // Manual Creation State
-  const [title, setTitle] = useState('')
   const [category, setCategory] = useState('General Knowledge')
   const [difficulty, setDifficulty] = useState('normal')
   const [ageCategory, setAgeCategory] = useState('teens')
@@ -22,14 +21,14 @@ export default function AdminQuizzes() {
   const [optC, setOptC] = useState('')
   const [optD, setOptD] = useState('')
   const [correct, setCorrect] = useState('')
+  const [manualHint, setManualHint] = useState('') // Added for manual creation
 
   // Upload State
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // --- NEW: Upload Settings State ---
-  const [uploadTitle, setUploadTitle] = useState('')
+  // Upload Settings State
   const [uploadCategory, setUploadCategory] = useState('General Knowledge')
   const [uploadDifficulty, setUploadDifficulty] = useState('normal')
   const [uploadAgeCategory, setUploadAgeCategory] = useState('teens')
@@ -46,19 +45,27 @@ export default function AdminQuizzes() {
   const handleManualCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    
+    const autoTitle = `${category} Quiz - ${new Date().toLocaleDateString()}`
+    
     try {
       const { data: quizData, error: quizError } = await supabase.from('quizzes').insert({
-        title, category, difficulty, age_category: ageCategory, status: 'published', time_limit_seconds: 15
+        title: autoTitle, category, difficulty, age_category: ageCategory, status: 'published', time_limit_seconds: 15
       }).select().single()
       if (quizError) throw quizError
 
       const { error: qError } = await supabase.from('questions').insert({
-        quiz_id: quizData.id, question_text: qText, options: [optA, optB, optC, optD], correct_answer: correct, points: 10
+        quiz_id: quizData.id, 
+        question_text: qText, 
+        options: [optA, optB, optC, optD], 
+        correct_answer: correct, 
+        hint: manualHint || null, // Save the manual hint
+        points: 10
       })
       if (qError) throw qError
 
       setActiveTab('list')
-      setTitle(''); setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect('')
+      setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect(''); setManualHint('')
       fetchQuizzes()
     } catch (err: any) {
       alert("Error: " + err.message)
@@ -66,16 +73,10 @@ export default function AdminQuizzes() {
     }
   }
 
-  // --- TEXT FILE PARSER HANDLER ---
+  // --- MULTIPLE TEXT FILE PARSER HANDLER ---
   const handleTextUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
-    if (!uploadTitle) {
-      setUploadStatus({ type: 'error', msg: "Please enter a title for the uploaded quiz." })
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
 
     setUploading(true)
     setUploadStatus(null)
@@ -84,60 +85,78 @@ export default function AdminQuizzes() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string
-        const blocks = text.split(/Question \d+:/).filter(b => b.trim() !== '')
+        
+        const quizBlocks = text.split(/Quiz \d+:/i)
+        const validQuizBlocks = quizBlocks.filter(block => block.trim().length > 0)
 
-        const parsedQuestions = []
+        let totalQuestionsAdded = 0
+        let totalQuizzesAdded = 0
 
-        for (const block of blocks) {
-          const lines = block.split('\n').map(l => l.trim()).filter(l => l !== '')
+        for (let i = 0; i < validQuizBlocks.length; i++) {
+          const blockText = validQuizBlocks[i]
           
-          if (lines.length === 0) continue
+          const questionBlocks = blockText.split(/Question \d+:/).filter(b => b.trim() !== '')
+          const parsedQuestions = []
 
-          const question_text = lines[0]
-          const options = lines
-            .filter(l => /^[A-D]\./.test(l))
-            .map(l => l.replace(/^[A-D]\.\s*/, '')) 
+          for (const qBlock of questionBlocks) {
+            const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
+            if (lines.length === 0) continue
 
-          const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:'))
-          const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
-          
-          const letterIndex = answerLetter.charCodeAt(0) - 65 
-          const correct_answer = options[letterIndex] || ''
+            const question_text = lines[0]
+            
+            const options = lines
+              .filter(l => /^[A-D]\./.test(l))
+              .map(l => l.replace(/^[A-D]\.\s*/, '')) 
 
-          if (question_text && options.length === 4 && correct_answer) {
-            parsedQuestions.push({ question_text, options, correct_answer })
+            // FIXED: Look for the Hint line
+            const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
+            const hint = hintLine ? hintLine.substring(5).trim() : null
+
+            const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:'))
+            const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
+            
+            const letterIndex = answerLetter.charCodeAt(0) - 65 
+            const correct_answer = options[letterIndex] || ''
+
+            if (question_text && options.length === 4 && correct_answer) {
+              parsedQuestions.push({ question_text, options, correct_answer, hint })
+            }
+          }
+
+          if (parsedQuestions.length > 0) {
+            const autoTitle = `${uploadCategory} Quiz - ${new Date().toLocaleDateString()}`
+            
+            const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
+              title: autoTitle, category: uploadCategory, difficulty: uploadDifficulty, age_category: uploadAgeCategory, status: 'published', time_limit_seconds: 15
+            }).select().single()
+
+            if (quizErr) throw quizErr
+
+            const questionsToInsert = parsedQuestions.map(q => ({
+              quiz_id: quizData.id,
+              question_text: q.question_text,
+              options: q.options,
+              correct_answer: q.correct_answer,
+              hint: q.hint, // Saves the parsed hint to the database
+              points: 10
+            }))
+
+            const { error: qErr } = await supabase.from('questions').insert(questionsToInsert)
+            if (qErr) throw qErr
+
+            totalQuestionsAdded += parsedQuestions.length
+            totalQuizzesAdded++
           }
         }
 
-        if (parsedQuestions.length === 0) {
+        if (totalQuizzesAdded === 0) {
           throw new Error("Could not find any valid questions. Please check the format.")
         }
 
-        // --- SAVE TO DATABASE USING SELECTED SETTINGS ---
-        const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
-          title: uploadTitle, // Uses the input from the form
-          category: uploadCategory, // Uses the dropdown
-          difficulty: uploadDifficulty, // Uses the dropdown
-          age_category: uploadAgeCategory, // Uses the dropdown
-          status: 'published',
-          time_limit_seconds: 15
-        }).select().single()
-
-        if (quizErr) throw quizErr
-
-        const questionsToInsert = parsedQuestions.map(q => ({
-          quiz_id: quizData.id,
-          question_text: q.question_text,
-          options: q.options,
-          correct_answer: q.correct_answer,
-          points: 10
-        }))
-
-        const { error: qErr } = await supabase.from('questions').insert(questionsToInsert)
-        if (qErr) throw qErr
-
-        setUploadStatus({ type: 'success', msg: `Successfully imported ${parsedQuestions.length} questions!` })
-        setUploadTitle('') // Reset title
+        setUploadStatus({ 
+          type: 'success', 
+          msg: `Successfully imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} total questions!` 
+        })
         fetchQuizzes()
       } catch (err: any) {
         setUploadStatus({ type: 'error', msg: err.message || 'Failed to parse document.' })
@@ -188,7 +207,7 @@ export default function AdminQuizzes() {
               <table className="w-full text-left border-collapse">
                 <thead className="border-b border-white/10 text-[10px] text-gray-500 uppercase tracking-widest font-bold">
                   <tr>
-                    <th className="pb-4 px-2">Title</th>
+                    <th className="pb-4 px-2">Title (Auto)</th>
                     <th className="pb-4 px-2">Category</th>
                     <th className="pb-4 px-2">Age Group</th>
                     <th className="pb-4 px-2">Difficulty</th>
@@ -225,10 +244,6 @@ export default function AdminQuizzes() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <div>
-              <label className="text-xs text-gray-400 font-bold mb-1 block">Quiz Title</label>
-              <input required placeholder="e.g. Science Vol 1" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ccff00]/50" />
-            </div>
-            <div>
               <label className="text-xs text-gray-400 font-bold mb-1 block">Category</label>
               <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white outline-none">
                 <option>General Knowledge</option><option>Science</option><option>Mathematics</option><option>History</option>
@@ -258,6 +273,9 @@ export default function AdminQuizzes() {
               <input required placeholder="Option C" value={optC} onChange={e => setOptC(e.target.value)} className="bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none" />
               <input required placeholder="Option D" value={optD} onChange={e => setOptD(e.target.value)} className="bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none" />
             </div>
+
+            {/* Added Manual Hint Input */}
+            <input placeholder="Hint (Optional - costs player 5 pts to reveal)" value={manualHint} onChange={e => setManualHint(e.target.value)} className="w-full bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 p-3 rounded-xl outline-none mb-4" />
             
             <input required placeholder="Correct Answer (Must match an option exactly)" value={correct} onChange={e => setCorrect(e.target.value)} className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-3.5 rounded-xl font-bold outline-none" />
           </div>
@@ -270,14 +288,10 @@ export default function AdminQuizzes() {
       {activeTab === 'upload' && (
         <div className="bg-[#0f1014] border border-white/10 rounded-3xl p-8 shadow-xl">
           
-          {/* NEW: SETTINGS PANEL */}
+          {/* SETTINGS PANEL */}
           <div className="mb-8 p-5 bg-black/30 border border-white/5 rounded-2xl">
             <h3 className="text-sm font-bold text-white mb-4">Quiz Settings</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[10px] text-gray-400 font-bold uppercase mb-1 block">Quiz Title</label>
-                <input placeholder="e.g. Science Vol 2" value={uploadTitle} onChange={e => setUploadTitle(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ccff00]/50" />
-              </div>
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase mb-1 block">Category</label>
                 <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none">
@@ -304,22 +318,23 @@ export default function AdminQuizzes() {
               <FileTextIcon size={40} weight="duotone" />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Upload Document</h2>
-            <p className="text-gray-400 text-sm mb-6">Upload a <strong>.txt</strong> file containing your questions.</p>
+            <p className="text-gray-400 text-sm mb-6">Upload a <strong>.txt</strong> file. You can include multiple quizzes by separating them with "Quiz 2:", "Quiz 3:", etc.</p>
 
             <input type="file" accept=".txt" ref={fileInputRef} onChange={handleTextUpload} className="hidden" id="text-upload" />
             
-            <label htmlFor="text-upload" className={`cursor-pointer inline-flex items-center justify-center gap-2 w-full py-4 rounded-xl font-bold transition ${uploading || !uploadTitle ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-[#ccff00] text-black hover:bg-white shadow-[0_0_20px_rgba(204,255,0,0.2)]'}`}>
+            <label htmlFor="text-upload" className={`cursor-pointer inline-flex items-center justify-center gap-2 w-full py-4 rounded-xl font-bold transition ${uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-[#ccff00] text-black hover:bg-white shadow-[0_0_20px_rgba(204,255,0,0.2)]'}`}>
               {uploading ? 'PROCESSING FILE...' : <><UploadSimpleIcon weight="bold" size={20} /> Select TXT File</>}
             </label>
 
             <div className="mt-6 text-left bg-black/40 border border-white/5 p-4 rounded-xl overflow-hidden">
-              <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Format required:</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Format required (Includes Hint):</p>
               <pre className="text-[10px] text-[#00f0ff] font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap">
 {`Question 1: What is water?
 A. A solid mineral
-B. A chemical compound made of hydrogen and oxygen
+B. H2O
 C. A type of air
 D. A metal element
+Hint: Think about the two elements that combine.
 Answer: B`}
               </pre>
             </div>
