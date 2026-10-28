@@ -1,11 +1,12 @@
 // src/pages/AdminQuizzes.tsx
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom' // ✅ ADDED PORTAL
 import { supabase } from '../lib/supabase'
 import { 
   PlusIcon, TrashIcon, UploadSimpleIcon, 
   FileTextIcon, CheckCircleIcon, XCircleIcon,
   GameControllerIcon, ClockIcon, ListDashesIcon, SparkleIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon, EyeIcon, XIcon 
 } from '@phosphor-icons/react'
 import { useNavigate } from 'react-router-dom'
 
@@ -15,8 +16,13 @@ export default function AdminQuizzes() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'upload'>('list')
   
+  // View Quiz State
+  const [viewingQuiz, setViewingQuiz] = useState<any | null>(null)
+  const [quizQuestions, setQuizQuestions] = useState<any[]>([])
+  const [loadingQuestions, setLoadingQuestions] = useState(false)
+
   // Manual Creation State
-  const [category, setCategory] = useState('General Knowledge')
+  const [category, setCategory] = useState('')
   const [difficulty, setDifficulty] = useState('normal')
   const [ageCategory, setAgeCategory] = useState('teens')
   const [manualTimer, setManualTimer] = useState(15)
@@ -36,7 +42,7 @@ export default function AdminQuizzes() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Upload Settings State
-  const [uploadCategory, setUploadCategory] = useState('General Knowledge')
+  const [uploadCategory, setUploadCategory] = useState('')
   const [uploadDifficulty, setUploadDifficulty] = useState('normal')
   const [uploadAgeCategory, setUploadAgeCategory] = useState('teens')
   const [uploadTimer, setUploadTimer] = useState(15)
@@ -49,17 +55,56 @@ export default function AdminQuizzes() {
 
   useEffect(() => { fetchQuizzes() }, [])
 
-  // --- MANUAL CREATE HANDLER ---
+  const generateHash = (text: string) => {
+    let hash = 0
+    const str = text.toLowerCase().replace(/\s+/g, '')
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash
+    }
+    return 'hash_' + Math.abs(hash).toString(16)
+  }
+
+  const handleViewQuiz = async (quiz: any) => {
+    setViewingQuiz(quiz)
+    setLoadingQuestions(true)
+    
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('quiz_id', quiz.id)
+      
+    if (!error && data) {
+      setQuizQuestions(data)
+    }
+    setLoadingQuestions(false)
+  }
+
   const handleManualCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     
-    const autoTitle = `${category} Quiz - ${new Date().toLocaleDateString()}`
-    
+    const finalCategory = category.trim() || 'General Knowledge'
+    const autoTitle = `${finalCategory} Quiz - ${new Date().toLocaleDateString()}`
+    const qHash = generateHash(`${qText}|${[optA, optB, optC, optD].sort().join('|')}`)
+
     try {
+      const { data: existing } = await supabase
+        .from('questions')
+        .select('id')
+        .eq('explanation', qHash)
+        .maybeSingle()
+
+      if (existing) {
+        alert("Duplicate Detected! This exact question already exists in the database.")
+        setLoading(false)
+        return
+      }
+
       const { data: quizData, error: quizError } = await supabase.from('quizzes').insert({
         title: autoTitle, 
-        category, 
+        category: finalCategory, 
         difficulty, 
         age_category: ageCategory, 
         status: 'published', 
@@ -73,12 +118,13 @@ export default function AdminQuizzes() {
         options: [optA, optB, optC, optD], 
         correct_answer: correct, 
         hint: manualHint || null,
-        points: 10
+        points: 10,
+        explanation: qHash 
       })
       if (qError) throw qError
 
       setActiveTab('list')
-      setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect(''); setManualHint('')
+      setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect(''); setManualHint(''); setCategory('')
       fetchQuizzes()
     } catch (err: any) {
       alert("Error: " + err.message)
@@ -86,7 +132,6 @@ export default function AdminQuizzes() {
     }
   }
 
-  // Handle file selection WITHOUT uploading
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -95,7 +140,6 @@ export default function AdminQuizzes() {
     }
   }
 
-  // Actual upload function triggered by the button
   const handleProcessUpload = async () => {
     if (!selectedFile) return
 
@@ -106,17 +150,15 @@ export default function AdminQuizzes() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string
-        
-        // ✅ FIXED: Support both English ("Quiz") and Tagalog ("Pagsusulit")
         const quizBlocks = text.split(/(?=(?:Quiz|Pagsusulit) \d+:)/i).filter(block => block.trim().length > 0)
 
         let totalQuestionsAdded = 0
+        let totalQuestionsSkipped = 0
         let totalQuizzesAdded = 0
+        const finalUploadCategory = uploadCategory.trim() || 'General Knowledge'
 
         for (let i = 0; i < quizBlocks.length; i++) {
           const blockText = quizBlocks[i]
-          
-          // ✅ FIXED: Support both English ("Question") and Tagalog ("Tanong")
           const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
           const parsedQuestions = []
 
@@ -124,17 +166,12 @@ export default function AdminQuizzes() {
             const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
             if (lines.length === 0) continue
 
-            // ✅ FIXED: Remove both "Question X:" and "Tanong X:"
             const question_text = lines[0].replace(/^(?:Question|Tanong) \d+:\s*/i, '').trim()
-            
-            const options = lines
-              .filter(l => /^[A-D]\./.test(l))
-              .map(l => l.replace(/^[A-D]\.\s*/, '')) 
+            const options = lines.filter(l => /^[A-D]\./.test(l)).map(l => l.replace(/^[A-D]\.\s*/, '')) 
 
             const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
             const hint = hintLine ? hintLine.substring(5).trim() : null
 
-            // ✅ FIXED: Support both English ("Answer") and Tagalog ("Sagot")
             const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:') || l.toLowerCase().startsWith('sagot:'))
             const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
             
@@ -142,16 +179,28 @@ export default function AdminQuizzes() {
             const correct_answer = options[letterIndex] || ''
 
             if (question_text && options.length === 4 && correct_answer) {
-              parsedQuestions.push({ question_text, options, correct_answer, hint })
+              const qHash = generateHash(`${question_text}|${[...options].sort().join('|')}`)
+              
+              const { data: existing } = await supabase
+                .from('questions')
+                .select('id')
+                .eq('explanation', qHash)
+                .maybeSingle()
+
+              if (existing) {
+                totalQuestionsSkipped++
+              } else {
+                parsedQuestions.push({ question_text, options, correct_answer, hint, qHash })
+              }
             }
           }
 
           if (parsedQuestions.length > 0) {
-            const autoTitle = `${uploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
+            const autoTitle = `${finalUploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
             
             const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
               title: autoTitle, 
-              category: uploadCategory, 
+              category: finalUploadCategory,
               difficulty: uploadDifficulty, 
               age_category: uploadAgeCategory, 
               status: 'published', 
@@ -166,7 +215,8 @@ export default function AdminQuizzes() {
               options: q.options,
               correct_answer: q.correct_answer,
               hint: q.hint,
-              points: 10
+              points: 10,
+              explanation: q.qHash
             }))
 
             const { error: qErr } = await supabase.from('questions').insert(questionsToInsert)
@@ -177,16 +227,21 @@ export default function AdminQuizzes() {
           }
         }
 
-        if (totalQuizzesAdded === 0) {
+        if (totalQuizzesAdded === 0 && totalQuestionsSkipped === 0) {
           throw new Error("Could not find any valid questions. Please check the format.")
         }
 
-        setUploadStatus({ 
-          type: 'success', 
-          msg: `Successfully imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} total questions!` 
-        })
+        if (totalQuizzesAdded === 0 && totalQuestionsSkipped > 0) {
+          setUploadStatus({ type: 'error', msg: `All ${totalQuestionsSkipped} questions in this file are duplicates and were skipped!` })
+        } else {
+          setUploadStatus({ 
+            type: 'success', 
+            msg: `Imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} questions. ${totalQuestionsSkipped > 0 ? `(${totalQuestionsSkipped} duplicates skipped)` : ''}` 
+          })
+        }
         
         setSelectedFile(null)
+        setUploadCategory('')
         if (fileInputRef.current) fileInputRef.current.value = ''
         
         fetchQuizzes()
@@ -205,7 +260,6 @@ export default function AdminQuizzes() {
     fetchQuizzes()
   }
 
-  // --- UI RENDER ---
   return (
     <div className="relative z-10 max-w-6xl mx-auto p-4 md:p-0">
       
@@ -228,9 +282,7 @@ export default function AdminQuizzes() {
         <button 
           onClick={() => setActiveTab('list')} 
           className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
-            activeTab === 'list' 
-              ? 'bg-[#ccff00]/10 border-[#ccff00]/50 shadow-[0_0_20px_rgba(204,255,0,0.1)]' 
-              : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
+            activeTab === 'list' ? 'bg-[#ccff00]/10 border-[#ccff00]/50 shadow-[0_0_20px_rgba(204,255,0,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
           <div className={`p-3 rounded-xl ${activeTab === 'list' ? 'bg-[#ccff00] text-black' : 'bg-white/5 text-gray-400'}`}>
@@ -245,9 +297,7 @@ export default function AdminQuizzes() {
         <button 
           onClick={() => setActiveTab('create')} 
           className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
-            activeTab === 'create' 
-              ? 'bg-[#00f0ff]/10 border-[#00f0ff]/50 shadow-[0_0_20px_rgba(0,240,255,0.1)]' 
-              : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
+            activeTab === 'create' ? 'bg-[#00f0ff]/10 border-[#00f0ff]/50 shadow-[0_0_20px_rgba(0,240,255,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
           <div className={`p-3 rounded-xl ${activeTab === 'create' ? 'bg-[#00f0ff] text-black' : 'bg-white/5 text-gray-400'}`}>
@@ -262,9 +312,7 @@ export default function AdminQuizzes() {
         <button 
           onClick={() => setActiveTab('upload')} 
           className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
-            activeTab === 'upload' 
-              ? 'bg-[#ff00a0]/10 border-[#ff00a0]/50 shadow-[0_0_20px_rgba(255,0,160,0.1)]' 
-              : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
+            activeTab === 'upload' ? 'bg-[#ff00a0]/10 border-[#ff00a0]/50 shadow-[0_0_20px_rgba(255,0,160,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
           <div className={`p-3 rounded-xl ${activeTab === 'upload' ? 'bg-[#ff00a0] text-black' : 'bg-white/5 text-gray-400'}`}>
@@ -340,13 +388,14 @@ export default function AdminQuizzes() {
                         </span>
                       </td>
                       <td className="py-4 px-6 text-right">
-                        <button 
-                          onClick={() => handleDeleteQuiz(q.id)} 
-                          className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition"
-                          title="Delete Quiz"
-                        >
-                          <TrashIcon size={20} weight="bold" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => handleViewQuiz(q)} className="p-2.5 text-[#00f0ff] bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 rounded-xl transition" title="View Quiz Questions">
+                            <EyeIcon size={20} weight="bold" />
+                          </button>
+                          <button onClick={() => handleDeleteQuiz(q.id)} className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition" title="Delete Quiz">
+                            <TrashIcon size={20} weight="bold" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -373,9 +422,7 @@ export default function AdminQuizzes() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div>
               <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Category</label>
-              <select value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition">
-                <option>General Knowledge</option><option>Science</option><option>Mathematics</option><option>History</option>
-              </select>
+              <input required placeholder="e.g. Pop Culture, Science..." value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" />
             </div>
             <div>
               <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Difficulty</label>
@@ -391,14 +438,7 @@ export default function AdminQuizzes() {
             </div>
             <div>
               <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Timer (Seconds)</label>
-              <input 
-                type="number" 
-                min="5" 
-                max="120" 
-                value={manualTimer} 
-                onChange={e => setManualTimer(parseInt(e.target.value))} 
-                className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" 
-              />
+              <input type="number" min="5" max="120" value={manualTimer} onChange={e => setManualTimer(parseInt(e.target.value))} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" />
             </div>
           </div>
 
@@ -473,9 +513,7 @@ export default function AdminQuizzes() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Category</label>
-                    <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]">
-                      <option>General Knowledge</option><option>Science</option><option>Mathematics</option><option>History</option>
-                    </select>
+                    <input required placeholder="e.g. Geography, History..." value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0] transition" />
                   </div>
                   
                   <div className="grid grid-cols-3 gap-3">
@@ -493,14 +531,7 @@ export default function AdminQuizzes() {
                     </div>
                     <div>
                       <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Timer (Sec)</label>
-                      <input 
-                        type="number" 
-                        min="5" 
-                        max="120" 
-                        value={uploadTimer} 
-                        onChange={e => setUploadTimer(parseInt(e.target.value))} 
-                        className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]" 
-                      />
+                      <input type="number" min="5" max="120" value={uploadTimer} onChange={e => setUploadTimer(parseInt(e.target.value))} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]" />
                     </div>
                   </div>
                 </div>
@@ -511,9 +542,7 @@ export default function AdminQuizzes() {
               <label 
                 htmlFor="text-upload" 
                 className={`cursor-pointer flex flex-col items-center justify-center w-full py-10 px-4 border-2 border-dashed rounded-3xl transition-all ${
-                  selectedFile 
-                    ? 'border-green-500/50 bg-green-500/5 text-green-400' 
-                    : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
+                  selectedFile ? 'border-green-500/50 bg-green-500/5 text-green-400' : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
                 }`}
               >
                 <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center mb-3">
@@ -532,9 +561,7 @@ export default function AdminQuizzes() {
                   onClick={handleProcessUpload}
                   disabled={uploading}
                   className={`mt-4 w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition ${
-                    uploading 
-                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                      : 'bg-[#ff00a0] text-black hover:bg-white'
+                    uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-[#ff00a0] text-black hover:bg-white'
                   }`}
                 >
                   {uploading ? (
@@ -611,6 +638,95 @@ Sagot: B`}
 
           </div>
         </div>
+      )}
+
+      {/* --- ✅ VIEW QUIZ MODAL (PORTAL) --- */}
+      {viewingQuiz && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0c] border border-white/10 rounded-3xl sm:rounded-[2rem] w-full max-w-4xl shadow-[0_0_50px_rgba(0,240,255,0.1)] relative max-h-[90vh] flex flex-col overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="p-5 sm:p-8 border-b border-white/10 bg-[#0f1014] relative z-10 shrink-0">
+              <button 
+                onClick={() => setViewingQuiz(null)} 
+                className="absolute top-5 right-5 sm:top-8 sm:right-8 text-gray-400 hover:text-white transition bg-white/5 hover:bg-white/10 p-2 rounded-xl z-20"
+              >
+                <XIcon weight="bold" size={20} />
+              </button>
+              
+              <div className="pr-12">
+                <h2 className="text-xl sm:text-3xl font-black text-white mb-2">{viewingQuiz.title}</h2>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <p className="text-xs sm:text-sm text-[#ff00a0] font-bold uppercase tracking-wider">{viewingQuiz.category}</p>
+                  <span className="text-white/20">•</span>
+                  <span className="text-[10px] sm:text-xs bg-white/10 text-gray-300 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">{viewingQuiz.age_category}</span>
+                  <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 ${
+                    viewingQuiz.difficulty === 'hard' ? 'text-[#ff00a0]' : 
+                    viewingQuiz.difficulty === 'intermediate' ? 'text-[#ff9500]' : 
+                    'text-[#ccff00]'
+                  }`}>
+                    {viewingQuiz.difficulty}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Modal Scrollable Body */}
+            <div className="overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar flex-1 bg-[#050505]">
+              {loadingQuestions ? (
+                <div className="py-20 text-center">
+                   <p className="text-[#ccff00] font-mono text-sm animate-pulse">LOADING QUESTIONS...</p>
+                </div>
+              ) : quizQuestions.length === 0 ? (
+                <div className="py-20 text-center">
+                   <p className="text-gray-500 text-sm">No questions found for this quiz.</p>
+                </div>
+              ) : (
+                quizQuestions.map((q, idx) => (
+                  <div key={q.id} className="bg-[#13151a] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm">
+                    <div className="flex items-start gap-3 mb-4">
+                      <span className="bg-white/5 text-gray-400 text-xs font-black px-2.5 py-1 rounded-lg shrink-0">Q{idx + 1}</span>
+                      <p className="font-bold text-white text-sm sm:text-base leading-snug pt-0.5">{q.question_text}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                      {q.options.map((opt: string, i: number) => {
+                        const isCorrect = opt === q.correct_answer
+                        return (
+                          <div key={i} className={`flex items-center gap-3 text-xs sm:text-sm p-3 rounded-xl border ${
+                            isCorrect 
+                              ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+                              : 'bg-[#0a0a0c] border-white/5 text-gray-400'
+                          }`}>
+                            <span className={`w-6 h-6 rounded-md flex items-center justify-center font-bold shrink-0 ${
+                              isCorrect ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'
+                            }`}>
+                              {String.fromCharCode(65 + i)}
+                            </span> 
+                            <span className={isCorrect ? 'font-bold' : ''}>{opt}</span>
+                            {isCorrect && <CheckCircleIcon className="ml-auto w-4 h-4 text-green-500 shrink-0" />}
+                          </div>
+                        )
+                      })}
+                    </div>
+                    
+                    {q.hint && (
+                      <div className="mt-3 bg-yellow-500/5 border border-yellow-500/10 p-3 rounded-xl flex items-start gap-2">
+                        <SparkleIcon weight="fill" className="text-yellow-500 w-4 h-4 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider block mb-0.5">Hint</span>
+                          <p className="text-xs text-yellow-200/70">{q.hint}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            
+          </div>
+        </div>,
+        document.body // ✅ Renders outside the main layout tree
       )}
 
     </div>
