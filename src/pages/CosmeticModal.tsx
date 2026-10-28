@@ -72,6 +72,14 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
 
       setUploading(true)
       setUploadError(false)
+
+      // ✅ FIX: Delete the old image from storage if it exists
+      if (formData.preview_url && formData.preview_url.includes('/storage/v1/object/public/cosmetics/')) {
+        const oldFilePath = formData.preview_url.split('/cosmetics/')[1]
+        if (oldFilePath) {
+          await supabase.storage.from('cosmetics').remove([oldFilePath])
+        }
+      }
       
       const fileExt = file.name.split('.').pop() || 'png'
       const fileName = `${Math.random()}.${fileExt}`
@@ -179,7 +187,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                   <select value={formData.cosmetic_type} onChange={e => setFormData({...formData, cosmetic_type: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl px-2 sm:px-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-white text-xs sm:text-sm">
                     <option value="background">Background</option>
                     <option value="quiz_theme">Quiz Theme</option>
-                    {/* ✅ FIXED: Changed from 'border' to 'avatar_border' */}
                     <option value="avatar_border">Avatar Border</option>
                   </select>
                 </div>
@@ -200,7 +207,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                   <div className="relative">
                     <CoinsIcon className="absolute left-2.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#ff00a0] w-4 h-4 sm:w-5 sm:h-5" />
                     
-                    {/* ✅ FIXED: Strictly accepts only numbers and allows clearing the field */}
                     <input 
                       required 
                       type="text" 

@@ -16,6 +16,9 @@ export default function AdminQuizzes() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'upload'>('list')
   
+  // NEW: Age Filter State
+  const [ageFilter, setAgeFilter] = useState<'all' | 'kids' | 'teens' | 'adults'>('all')
+
   // View Quiz State
   const [viewingQuiz, setViewingQuiz] = useState<any | null>(null)
   const [quizQuestions, setQuizQuestions] = useState<any[]>([])
@@ -260,6 +263,11 @@ export default function AdminQuizzes() {
     fetchQuizzes()
   }
 
+  // NEW: Filtered Quizzes Logic
+  const filteredQuizzes = quizzes.filter(q => 
+    ageFilter === 'all' ? true : q.age_category === ageFilter
+  )
+
   return (
     <div className="relative z-10 max-w-6xl mx-auto sm:p-4 md:p-0 admin-page-enter">
       
@@ -328,17 +336,37 @@ export default function AdminQuizzes() {
       {/* --- TAB 1: LIST QUIZZES --- */}
       {activeTab === 'list' && (
         <div className="bg-transparent sm:bg-[#0f1014] sm:border sm:border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
+          
+          {/* NEW: AGE FILTER TABS */}
+          <div className="p-4 border-b border-white/10 bg-black/20 flex flex-wrap gap-2">
+            {['all', 'kids', 'teens', 'adults'].map((tier) => (
+              <button
+                key={tier}
+                onClick={() => setAgeFilter(tier as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${
+                  ageFilter === tier 
+                    ? 'bg-white text-black shadow-lg scale-105' 
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {tier === 'all' ? 'All Quizzes' : tier}
+              </button>
+            ))}
+          </div>
+
           {loading ? (
              <div className="py-20 text-center bg-[#0f1014] rounded-2xl">
                <p className="text-[#ccff00] font-mono animate-pulse tracking-widest text-sm">LOADING DATABASE...</p>
              </div>
-          ) : quizzes.length === 0 ? (
+          ) : filteredQuizzes.length === 0 ? (
             <div className="py-20 sm:py-24 text-center px-4 bg-[#0f1014] rounded-2xl border border-white/10 sm:border-0">
               <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/5 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-4">
                 <GameControllerIcon weight="duotone" className="w-8 h-8 sm:w-10 sm:h-10 text-gray-600" />
               </div>
               <p className="text-white font-bold text-base sm:text-lg mb-1">No Quizzes Found</p>
-              <p className="text-gray-500 text-xs sm:text-sm mb-6 max-w-xs mx-auto">Your database is empty. Create your first quiz to get started.</p>
+              <p className="text-gray-500 text-xs sm:text-sm mb-6 max-w-xs mx-auto">
+                No quizzes match the "{ageFilter}" filter. Try selecting a different category or create a new quiz.
+              </p>
               <button onClick={() => setActiveTab('create')} className="bg-[#ccff00] text-black px-6 py-2.5 rounded-xl font-bold hover:bg-white transition text-sm">
                 Create New Quiz
               </button>
@@ -357,7 +385,7 @@ export default function AdminQuizzes() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {quizzes.map(q => (
+                    {filteredQuizzes.map(q => (
                       <tr key={q.id} className="hover:bg-white/[0.02] transition group">
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-4">
@@ -372,7 +400,12 @@ export default function AdminQuizzes() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex flex-col items-start gap-1">
-                            <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                            {/* NEW: COLOR CODED AGE BADGES */}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
+                              q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
+                              q.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
+                              'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/20'
+                            }`}>
                               {q.age_category}
                             </span>
                             <span className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -405,9 +438,9 @@ export default function AdminQuizzes() {
                 </table>
               </div>
 
-              {/* ✅ MOBILE CARD LIST (Fits perfectly on narrow screens) */}
-              <div className="sm:hidden flex flex-col gap-3">
-                {quizzes.map(q => (
+              {/* ✅ MOBILE CARD LIST */}
+              <div className="sm:hidden flex flex-col gap-3 p-3">
+                {filteredQuizzes.map(q => (
                   <div key={q.id} className="bg-[#0f1014] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
@@ -421,7 +454,12 @@ export default function AdminQuizzes() {
                     
                     <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[9px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                        {/* NEW: COLOR CODED AGE BADGES (Mobile) */}
+                        <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
+                          q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
+                          q.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
+                          'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/20'
+                        }`}>
                           {q.age_category}
                         </span>
                         <span className={`text-[9px] font-bold uppercase tracking-wider ${
@@ -706,7 +744,13 @@ Sagot: B`}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
                   <p className="text-[10px] sm:text-sm text-[#ff00a0] font-bold uppercase tracking-wider">{viewingQuiz.category}</p>
                   <span className="text-white/20 hidden sm:block">•</span>
-                  <span className="text-[9px] sm:text-xs bg-white/10 text-gray-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg font-bold uppercase tracking-wider">{viewingQuiz.age_category}</span>
+                  <span className={`text-[9px] sm:text-xs px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg font-bold uppercase tracking-wider border ${
+                    viewingQuiz.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
+                    viewingQuiz.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
+                    'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/20'
+                  }`}>
+                    {viewingQuiz.age_category}
+                  </span>
                   <span className={`text-[9px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg bg-white/5 border border-white/10 ${
                     viewingQuiz.difficulty === 'hard' ? 'text-[#ff00a0]' : 
                     viewingQuiz.difficulty === 'intermediate' ? 'text-[#ff9500]' : 
