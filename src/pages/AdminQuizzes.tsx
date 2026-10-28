@@ -58,6 +58,24 @@ export default function AdminQuizzes() {
 
   useEffect(() => { fetchQuizzes() }, [])
 
+  // ✅ Auto-dismiss the success message after 5 seconds
+  useEffect(() => {
+    if (uploadStatus?.type === 'success') {
+      const timer = setTimeout(() => {
+        setUploadStatus(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadStatus]);
+
+  // Clear status when switching to the upload tab
+  const handleTabChange = (tab: 'list' | 'create' | 'upload') => {
+    setActiveTab(tab);
+    if (tab === 'upload') {
+      setUploadStatus(null); 
+    }
+  }
+
   const generateHash = (text: string) => {
     let hash = 0
     const str = text.toLowerCase().replace(/\s+/g, '')
@@ -126,6 +144,9 @@ export default function AdminQuizzes() {
       })
       if (qError) throw qError
 
+      // Show success message when created manually
+      setUploadStatus({ type: 'success', msg: "Quiz published successfully!" })
+      
       setActiveTab('list')
       setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect(''); setManualHint(''); setCategory('')
       fetchQuizzes()
@@ -288,7 +309,7 @@ export default function AdminQuizzes() {
       {/* PREMIUM TABS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 md:mb-8">
         <button 
-          onClick={() => setActiveTab('list')} 
+          onClick={() => handleTabChange('list')} 
           className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'list' ? 'bg-[#ccff00]/10 border-[#ccff00]/50 shadow-[0_0_20px_rgba(204,255,0,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
@@ -303,7 +324,7 @@ export default function AdminQuizzes() {
         </button>
 
         <button 
-          onClick={() => setActiveTab('create')} 
+          onClick={() => handleTabChange('create')} 
           className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'create' ? 'bg-[#00f0ff]/10 border-[#00f0ff]/50 shadow-[0_0_20px_rgba(0,240,255,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
@@ -318,7 +339,7 @@ export default function AdminQuizzes() {
         </button>
 
         <button 
-          onClick={() => setActiveTab('upload')} 
+          onClick={() => handleTabChange('upload')} 
           className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'upload' ? 'bg-[#ff00a0]/10 border-[#ff00a0]/50 shadow-[0_0_20px_rgba(255,0,160,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
@@ -367,7 +388,7 @@ export default function AdminQuizzes() {
               <p className="text-gray-500 text-xs sm:text-sm mb-6 max-w-xs mx-auto">
                 No quizzes match the "{ageFilter}" filter. Try selecting a different category or create a new quiz.
               </p>
-              <button onClick={() => setActiveTab('create')} className="bg-[#ccff00] text-black px-6 py-2.5 rounded-xl font-bold hover:bg-white transition text-sm">
+              <button onClick={() => handleTabChange('create')} className="bg-[#ccff00] text-black px-6 py-2.5 rounded-xl font-bold hover:bg-white transition text-sm">
                 Create New Quiz
               </button>
             </div>
@@ -657,6 +678,7 @@ export default function AdminQuizzes() {
                 </button>
               )}
 
+              {/* ✅ FIXED: Removed the X button, relies purely on the auto-dismiss timer */}
               {uploadStatus && (
                 <div className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-xl border flex items-start sm:items-center gap-2 sm:gap-3 text-left ${
                   uploadStatus.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
