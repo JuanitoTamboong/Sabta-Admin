@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
   UsersIcon, BookOpenIcon, LightningIcon,
-  ArrowUpRightIcon, CaretRightIcon, // ✅ Removed TargetIcon
+  ArrowUpRightIcon, CaretRightIcon,
   CheckCircleIcon, PlusIcon, ChartBarIcon,
   CoinsIcon, ShieldCheckIcon, PulseIcon, ShoppingBagIcon,
   ArrowRightIcon
@@ -49,12 +49,12 @@ export default function AdminDashboard() {
 
         const { count: totalQuizzes } = await supabase.from('quizzes').select('id', { count: 'exact', head: true })
 
-        const today = new Date().toISOString().split('T')[0]
         const { data: attempts } = await supabase.from('quiz_attempts').select('score, accuracy, created_at')
-
+        
         const totalAttempts = attempts?.length || 0
         let pointsDistributed = 0, activeTodayCount = 0
         let totalAccuracy = 0
+        const today = new Date().toISOString().split('T')[0]
 
         attempts?.forEach(a => {
           pointsDistributed += (a.score || 0)
@@ -99,7 +99,7 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="relative z-10 max-w-7xl mx-auto admin-page-enter">
+    <div className="relative z-10 max-w-7xl mx-auto admin-page-enter pb-20">
       
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 sm:mb-8">
@@ -111,37 +111,40 @@ export default function AdminDashboard() {
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Command Center</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">Overview of platform health, players, and economy.</p>
         </div>
-        <button 
-          onClick={() => navigate('/admin/quizzes')} 
-          className="bg-[#ccff00] text-black px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 hover:bg-white transition shadow-[0_0_20px_rgba(204,255,0,0.3)] hover:scale-105 transform duration-200 w-full sm:w-auto justify-center"
-        >
-          <PlusIcon weight="bold" className="w-4 h-4 sm:w-5 sm:h-5" /> Create New Quiz
-        </button>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button 
+            onClick={() => navigate('/admin/quizzes')} 
+            className="flex-1 sm:flex-none bg-[#ccff00] text-black px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 hover:bg-white transition shadow-[0_0_20px_rgba(204,255,0,0.3)] hover:scale-105 transform duration-200"
+          >
+            <PlusIcon weight="bold" className="w-4 h-4 sm:w-5 sm:h-5" /> Create New Quiz
+          </button>
+        </div>
       </div>
 
       {/* STAT CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-6 sm:mb-8">
         {statCards.map((s) => {
           const Icon = s.icon
           return (
-            <div key={s.label} className="bg-[#0f1014] border border-white/5 p-3 sm:p-5 rounded-2xl sm:rounded-3xl relative overflow-hidden group hover:border-white/20 transition-all duration-300">
-              <div className="absolute top-0 right-0 w-20 h-20 sm:w-32 sm:h-32 rounded-full blur-[40px] sm:blur-[50px] opacity-10 group-hover:opacity-20 transition duration-500 pointer-events-none" style={{ background: s.color, transform: 'translate(30%, -30%)' }} />
+            <div key={s.label} className="bg-[#0f1014] border border-white/5 p-2.5 sm:p-5 rounded-xl sm:rounded-3xl relative overflow-hidden group hover:border-white/20 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-16 h-16 sm:w-32 sm:h-32 rounded-full blur-[30px] sm:blur-[50px] opacity-10 group-hover:opacity-20 transition duration-500 pointer-events-none" style={{ background: s.color, transform: 'translate(30%, -30%)' }} />
               
-              <div className="flex items-center justify-between mb-3 sm:mb-4 relative z-10">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-2xl flex items-center justify-center shadow-inner" style={{ background: `${s.color}15`, border: `1px solid ${s.color}30` }}>
+              <div className="flex items-center justify-between mb-2 sm:mb-4 relative z-10">
+                <div className="w-7 h-7 sm:w-12 sm:h-12 rounded-lg sm:rounded-2xl flex items-center justify-center shadow-inner" style={{ background: `${s.color}15`, border: `1px solid ${s.color}30` }}>
                   <Icon weight="duotone" className="w-4 h-4 sm:w-6 sm:h-6" style={{ color: s.color }} />
                 </div>
-                <span className="text-[8px] sm:text-[10px] font-bold flex items-center gap-1 text-white bg-white/5 border border-white/10 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg">
-                  <ArrowUpRightIcon weight="bold" className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={{ color: s.color }} /> {s.delta}
+                <span className="text-[7px] sm:text-[10px] font-bold flex items-center gap-1 text-white bg-white/5 border border-white/10 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg">
+                  <ArrowUpRightIcon weight="bold" className="w-2 h-2 sm:w-3 sm:h-3" style={{ color: s.color }} /> {s.delta}
                 </span>
               </div>
               
               <div className="relative z-10">
-                <p className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">{s.value}</p>
-                <p className="text-[9px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5 sm:mt-1 truncate">{s.label}</p>
+                <p className="text-base sm:text-2xl font-black text-white tracking-tight truncate">{s.value}</p>
+                <p className="text-[8px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5 sm:mt-1 truncate">{s.label}</p>
               </div>
 
-              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/5 relative z-10 hidden sm:block">
+              <div className="mt-2 sm:mt-4 pt-2 sm:pt-4 border-t border-white/5 relative z-10 hidden sm:block">
                 <div className="flex justify-between text-[8px] sm:text-[10px] text-gray-500 font-mono mb-1 sm:mb-1.5">
                   <span>{s.deltaLabel}</span>
                   <span>{Math.round(s.progress)}%</span>

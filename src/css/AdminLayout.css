@@ -32,10 +32,10 @@
   animation: adminSlideInLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ✅ 3. CUSTOM DARK SCROLLBAR (For tables and lists) */
+/* ✅ 3. CUSTOM DARK SCROLLBAR (For tables, lists, and main page) */
 .admin-custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 .admin-custom-scrollbar::-webkit-scrollbar-track {
@@ -43,18 +43,22 @@
 }
 
 .admin-custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .admin-custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(204, 255, 0, 0.3); /* Neon lime on hover */
+  background: rgba(204, 255, 0, 0.4); /* Neon lime on hover */
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 /* For Firefox */
 .admin-custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 /* ✅ 4. SAFE AREA FOR MOBILE BOTTOM NAV */

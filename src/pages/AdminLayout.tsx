@@ -1,10 +1,12 @@
 // src/pages/AdminLayout.tsx
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import {
   SquaresFourIcon, BookOpenIcon, UsersIcon, ChartLineUpIcon,
-  GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon
+  GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon,
+  CheckCircleIcon, XIcon
 } from '@phosphor-icons/react'
 import sabtaLogo from '../assets/icons/sabta-logo.png'
 import '../css/AdminLayout.css'
@@ -23,6 +25,12 @@ export default function AdminLayout() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
 
+  // Notifications State
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0) // ✅ New state for count
+  const notifRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     const checkAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -40,6 +48,74 @@ export default function AdminLayout() {
     checkAdmin()
   }, [navigate])
 
+  // Fetch notifications across the whole layout
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      const today = new Date().toISOString().split('T')[0]
+      
+      const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
+      const { data: attempts } = await supabase.from('quiz_attempts').select('*, profiles(display_name)').order('created_at', { ascending: false }).limit(5)
+
+      const newNotifs: any[] = []
+      let newTodayCount = 0 // ✅ Counter for today's events
+      
+      usersData?.forEach(u => {
+        const isToday = u.created_at.startsWith(today)
+        if (isToday) newTodayCount++
+
+        newNotifs.push({
+          id: `signup-${u.id}`,
+          title: 'New Player Joined',
+          message: `${u.display_name || 'A new user'} has created an account.`,
+          date: new Date(u.created_at),
+          icon: UsersIcon,
+          color: '#00f0ff',
+          link: '/admin/users'
+        })
+      })
+
+      attempts?.forEach((a: any) => {
+        const isToday = a.created_at.startsWith(today)
+        if (isToday) newTodayCount++
+
+        newNotifs.push({
+          id: `attempt-${a.id}`,
+          title: 'Quiz Completed',
+          message: `${a.profiles?.display_name || 'A player'} scored ${a.accuracy || 0}% on a quiz.`,
+          date: new Date(a.created_at),
+          icon: CheckCircleIcon,
+          color: '#ccff00',
+          link: '/admin/users'
+        })
+      })
+
+      newNotifs.sort((a, b) => b.date.getTime() - a.date.getTime())
+      setNotifications(newNotifs)
+      setUnreadCount(newTodayCount) // ✅ Set the count
+    }
+
+    if (!loading) fetchNotifications()
+  }, [loading])
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // ✅ Handle opening the bell and clearing the count
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications)
+    if (!showNotifications) {
+      setUnreadCount(0) // Clear count when opened
+    }
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     navigate('/admin/login')
@@ -50,7 +126,7 @@ export default function AdminLayout() {
   if (loading) return <div className="min-h-screen bg-[#050505] text-[#ccff00] flex items-center justify-center font-mono">VERIFYING CLEARANCE...</div>
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex font-sans">
+    <div className="min-h-screen bg-[#050505] text-white flex font-sans h-screen overflow-hidden">
       
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden lg:flex w-64 border-r border-white/10 bg-[#0a0b0f] flex-col py-6 px-3 fixed h-full z-30">
@@ -93,8 +169,8 @@ export default function AdminLayout() {
       </aside>
 
       {/* MAIN AREA */}
-      <main className="flex-1 lg:ml-64 pb-24 lg:pb-0 flex flex-col min-h-screen">
-        <header className="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-md border-b border-white/10 px-4 lg:px-8 py-4">
+      <main className="flex-1 lg:ml-64 flex flex-col h-screen overflow-hidden">
+        <header className="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-md border-b border-white/10 px-4 lg:px-8 py-4 shrink-0">
           <div className="flex items-center justify-between gap-4">
             
             <div className="flex items-center gap-3">
@@ -105,15 +181,26 @@ export default function AdminLayout() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
-              {/* ✅ MOBILE LOGOUT BUTTON ADDED HERE */}
               <button onClick={handleLogout} className="lg:hidden p-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 hover:bg-red-500/20 transition">
                 <SignOutIcon weight="bold" className="w-5 h-5" />
               </button>
 
-              <button className="relative p-2 bg-[#0f1014] border border-white/10 rounded-xl hover:bg-white/5 transition">
-                <BellIcon weight="duotone" className="w-5 h-5 text-gray-300" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-[#ff00a0] rounded-full animate-pulse" />
-              </button>
+              {/* ✅ FIXED: Notification Bell with Numbered Badge */}
+              <div className="relative" ref={notifRef}>
+                <button 
+                  onClick={toggleNotifications} 
+                  className={`relative p-2 border rounded-xl transition group ${showNotifications ? 'bg-[#0f1014] border-[#ccff00]/50' : 'bg-[#0f1014] border-white/10 hover:bg-white/5'}`}
+                >
+                  <BellIcon weight="duotone" className={`w-5 h-5 ${showNotifications ? 'text-[#ccff00]' : 'text-gray-300'}`} />
+                  
+                  {/* Numbered Badge */}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-[#ff00a0] text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-[#050505] shadow-lg">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
               
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff00a0] to-purple-600 border-2 border-white/20 flex items-center justify-center font-bold text-black text-sm">
                 A
@@ -123,14 +210,65 @@ export default function AdminLayout() {
         </header>
 
         {/* CONTENT PADDING */}
-        <div className="p-4 lg:p-8 relative flex-1 w-full max-w-full overflow-x-hidden">
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#00f0ff]/5 rounded-full blur-[120px] pointer-events-none" />
-          
-          <div className="relative z-10 h-full admin-page-enter">
-            <Outlet />
+        <div className="flex-1 overflow-y-auto admin-custom-scrollbar relative w-full">
+          <div className="p-4 lg:p-8 relative w-full max-w-full min-h-full">
+            <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#00f0ff]/5 rounded-full blur-[120px] pointer-events-none" />
+            
+            <div className="relative z-10 admin-page-enter pb-24 lg:pb-8">
+              <Outlet />
+            </div>
           </div>
         </div>
       </main>
+
+      {/* ✅ NOTIFICATION DROPDOWN PORTAL */}
+      {showNotifications && createPortal(
+        <>
+          <div className="fixed inset-0 z-[100] bg-black/20 sm:hidden" onClick={() => setShowNotifications(false)} />
+          
+          <div className="fixed top-16 right-4 sm:top-20 sm:right-8 w-72 sm:w-80 bg-[#0f1014] border border-white/10 rounded-2xl shadow-2xl z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">Notifications</h3>
+              <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-white">
+                <XIcon weight="bold" size={16} />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto admin-custom-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="p-6 text-center">
+                  <BellIcon weight="duotone" className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                  <p className="text-xs text-gray-500">You're all caught up!</p>
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <div 
+                    key={n.id} 
+                    onClick={() => { navigate(n.link); setShowNotifications(false); }}
+                    className="p-3 border-b border-white/5 hover:bg-white/5 cursor-pointer transition flex gap-3"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${n.color}15`, color: n.color }}>
+                      <n.icon weight="fill" size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white leading-tight">{n.title}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{n.message}</p>
+                      <p className="text-[9px] text-gray-600 mt-1 font-mono">
+                        {n.date.toLocaleDateString()} at {n.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-2 border-t border-white/10 bg-white/5 text-center">
+              <button onClick={() => { navigate('/admin/users'); setShowNotifications(false); }} className="text-[10px] font-bold text-[#ccff00] hover:underline">
+                View All Activity
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-2 pb-safe">
