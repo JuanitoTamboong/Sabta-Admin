@@ -22,6 +22,16 @@ export default function AdminCosmetics() {
     fetchItems()
   }, [])
 
+  // ✅ FIX: Automatically hide the toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
+
   const fetchItems = async () => {
     setLoading(true)
     const { data } = await supabase.from('cosmetic_items').select('*').order('created_at', { ascending: false })
@@ -88,7 +98,7 @@ export default function AdminCosmetics() {
             return (
               <div key={item.id} className={`bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden group transition-all duration-300 flex flex-col ${borderHover}`}>
                 
-                {/* ✅ IMAGE CONTAINER (object-contain so nothing is cut off) */}
+                {/* IMAGE CONTAINER */}
                 <div className="h-28 sm:h-40 bg-[#050505] relative flex items-center justify-center overflow-hidden border-b border-white/5">
                   <div className={`absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500 blur-2xl ${
                     isLegendary ? 'bg-[#ff00a0]' : isEpic ? 'bg-[#ccff00]' : isRare ? 'bg-[#00f0ff]' : 'bg-gray-500'
@@ -98,7 +108,7 @@ export default function AdminCosmetics() {
                     <img 
                       src={item.preview_url} 
                       alt={item.name} 
-                      className="w-full h-full object-contain p-2 relative z-10" // ✅ Changed to object-contain
+                      className="w-full h-full object-contain p-2 relative z-10"
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                         e.currentTarget.parentElement?.classList.add('image-error');
@@ -148,9 +158,9 @@ export default function AdminCosmetics() {
         }}
       />
 
-      {/* TOAST */}
+      {/* ✅ TOAST (Now automatically disappears after 3 seconds) */}
       {toast && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[10000] px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-2xl border flex items-center gap-2 sm:gap-3 ${
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[10000] px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-2xl border flex items-center gap-2 sm:gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
           toast.type === 'success' ? 'bg-[#0f1014] border-green-500/30 text-green-400' : 'bg-[#0f1014] border-red-500/30 text-red-400'
         }`}>
           {toast.type === 'success' ? <CheckCircleIcon weight="fill" size={20} className="sm:w-6 sm:h-6" /> : <WarningCircleIcon weight="fill" size={20} className="sm:w-6 sm:h-6" />}
