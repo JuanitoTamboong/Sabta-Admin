@@ -20,7 +20,15 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
   const [uploadError, setUploadError] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    cosmetic_type: string;
+    price: number | string;
+    rarity: string;
+    preview_url: string;
+    status: string;
+  }>({
     name: '',
     description: '',
     cosmetic_type: 'background',
@@ -39,7 +47,7 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
           name: editingItem.name || '',
           description: editingItem.description || '',
           cosmetic_type: editingItem.cosmetic_type || 'background',
-          price: editingItem.price ? Number(editingItem.price) : 100,
+          price: editingItem.price !== undefined && editingItem.price !== null ? Number(editingItem.price) : 100,
           rarity: editingItem.rarity || 'common',
           preview_url: editingItem.preview_url || '',
           status: editingItem.status || 'published'
@@ -98,11 +106,15 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
     e.preventDefault()
     setSaving(true)
     try {
+      // Ensure price is a valid number before saving
+      const numericPrice = typeof formData.price === 'string' ? parseInt(formData.price) : formData.price;
+      const finalPrice = isNaN(numericPrice) ? 0 : numericPrice;
+
       const payload = {
         name: formData.name,
         description: formData.description,
         cosmetic_type: formData.cosmetic_type,
-        price: formData.price,
+        price: finalPrice,
         rarity: formData.rarity,
         preview_url: formData.preview_url,
         status: formData.status
@@ -137,7 +149,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
         {/* HEADER */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 bg-[#0f1014] z-10 shrink-0">
           <h2 className="text-base sm:text-xl font-bold flex items-center gap-2 sm:gap-3 text-white">
-            {/* ✅ FIXED: Combined the className props into one */}
             <SparkleIcon className="text-[#ff00a0] sm:w-6 sm:h-6" size={20} /> 
             {editingItem ? 'Edit Cosmetic' : 'Create Cosmetic'}
           </h2>
@@ -167,8 +178,9 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                   <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 sm:mb-2 block">Type</label>
                   <select value={formData.cosmetic_type} onChange={e => setFormData({...formData, cosmetic_type: e.target.value})} className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl px-2 sm:px-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-white text-xs sm:text-sm">
                     <option value="background">Background</option>
-                    <option value="theme">Quiz Theme</option>
-                    <option value="border">Avatar Border</option>
+                    <option value="quiz_theme">Quiz Theme</option>
+                    {/* ✅ FIXED: Changed from 'border' to 'avatar_border' */}
+                    <option value="avatar_border">Avatar Border</option>
                   </select>
                 </div>
                 <div>
@@ -187,7 +199,21 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                   <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 sm:mb-2 block">Price (Coins)</label>
                   <div className="relative">
                     <CoinsIcon className="absolute left-2.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#ff00a0] w-4 h-4 sm:w-5 sm:h-5" />
-                    <input required type="number" min="0" value={isNaN(formData.price) ? '' : formData.price} onChange={e => { const val = parseInt(e.target.value); setFormData({...formData, price: isNaN(val) ? 0 : val}); }} className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl pl-8 sm:pl-12 pr-2 sm:pr-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-[#ff00a0] font-bold text-xs sm:text-sm" />
+                    
+                    {/* ✅ FIXED: Strictly accepts only numbers and allows clearing the field */}
+                    <input 
+                      required 
+                      type="text" 
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={formData.price} 
+                      onChange={e => {
+                        const numericValue = e.target.value.replace(/[^0-9]/g, '');
+                        setFormData({...formData, price: numericValue});
+                      }} 
+                      className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl pl-8 sm:pl-12 pr-2 sm:pr-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-[#ff00a0] font-bold text-xs sm:text-sm" 
+                    />
+                    
                   </div>
                 </div>
                 <div>
