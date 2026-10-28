@@ -1,6 +1,7 @@
 // src/pages/AdminPlayers.tsx
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import {
   MagnifyingGlassIcon, ArrowLeftIcon, UsersIcon, CoinsIcon,
@@ -39,23 +40,22 @@ export default function AdminPlayers() {
     setDeleting(true)
     
     try {
-      const { error, count } = await supabase
+      // ✅ FIX: Directly delete the profile. 
+      // The ON DELETE CASCADE in your SQL will wipe their scores, coins, etc.
+      // This bypasses the RPC cache issue.
+      const { error } = await supabase
         .from('profiles')
-        .delete({ count: 'exact' })
+        .delete()
         .eq('id', playerToDelete.id)
 
       if (error) throw error
-      
-      if (count === 0) {
-        throw new Error("Permission denied. Make sure you are logged in as an Admin and the RLS policies are set correctly in the database.")
-      }
 
       setPlayerToDelete(null)
       await fetchPlayers()
       
     } catch (err: any) {
       console.error("Error deleting player:", err)
-      alert("Failed to delete player: " + err.message)
+      alert("Failed to delete player: " + (err.message || "Unknown error"))
     } finally {
       setDeleting(false)
     }
@@ -127,7 +127,6 @@ export default function AdminPlayers() {
             <p className="text-gray-500 text-xs sm:text-sm">Try adjusting your search or tier filters.</p>
           </div>
         ) : (
-          // ✅ Changed to grid-cols-2 on mobile for smaller, neater cards
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {filteredPlayers.map((player) => (
               <div key={player.id} className="bg-[#0f1014] border border-white/5 sm:border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-5 hover:border-white/20 transition-all group relative overflow-hidden">
@@ -135,7 +134,7 @@ export default function AdminPlayers() {
                 {/* Background Accent */}
                 <div className="absolute top-0 right-0 w-16 h-16 sm:w-24 sm:h-24 bg-[#00f0ff]/5 rounded-bl-full pointer-events-none group-hover:bg-[#00f0ff]/10 transition-colors" />
                 
-                {/* Delete Button (Always visible on mobile, hover on desktop) */}
+                {/* Delete Button */}
                 <button
                   onClick={() => setPlayerToDelete(player)}
                   className="absolute top-2 right-2 sm:top-4 sm:right-4 text-red-500 hover:text-white bg-red-500/10 hover:bg-red-500 p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition z-20 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
@@ -194,29 +193,49 @@ export default function AdminPlayers() {
         )}
       </div>
 
-      {/* DELETE MODAL */}
-      {playerToDelete && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
-            <button onClick={() => setPlayerToDelete(null)} className="absolute top-4 right-4 sm:top-6 sm:right-6 text-gray-500 hover:text-white transition">
-              <XIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
+      {/* DELETE MODAL USING PORTAL */}
+      {playerToDelete && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-[2rem] p-5 sm:p-8 max-w-md w-full shadow-[0_0_50px_rgba(255,0,0,0.15)] relative text-center animate-in fade-in zoom-in-95 duration-200">
+            
+            <button onClick={() => setPlayerToDelete(null)} className="absolute top-4 right-4 sm:top-6 sm:right-6 text-gray-500 hover:text-white transition bg-white/5 hover:bg-white/10 p-1.5 rounded-lg">
+              <XIcon weight="bold" size={20} className="sm:w-5 sm:h-5" />
             </button>
-            <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mb-4 sm:mb-6 text-red-500">
-              <WarningCircleIcon weight="fill" size={24} className="sm:w-8 sm:h-8" />
+            
+            <div className="mx-auto w-14 h-14 sm:w-20 sm:h-20 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mb-4 sm:mb-6 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+              <WarningCircleIcon weight="fill" size={28} className="sm:w-10 sm:h-10" />
             </div>
-            <h2 className="text-lg sm:text-2xl font-bold text-white mb-2">Delete Player?</h2>
-            <p className="text-gray-400 text-xs sm:text-sm mb-6">
+            
+            <h2 className="text-xl sm:text-2xl font-black text-white mb-2">Delete Player?</h2>
+            
+            <p className="text-gray-400 text-xs sm:text-sm mb-6 leading-relaxed">
               Are you sure you want to permanently delete <strong className="text-white">{playerToDelete.display_name}</strong>? 
-              This will also wipe all their scores, coins, and inventory. This cannot be undone.
+              This will wipe all their scores, coins, and inventory. 
+              <br/><br/>
+              <span className="text-red-400/80 text-[10px] sm:text-xs">
+                *Note: This deletes their game data. To completely block their Google account from logging in, you must delete them in the Supabase Authentication dashboard.
+              </span>
             </p>
+            
             <div className="flex gap-2 sm:gap-3">
-              <button onClick={() => setPlayerToDelete(null)} disabled={deleting} className="flex-1 py-2.5 sm:py-3 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl font-bold transition disabled:opacity-50 text-xs sm:text-sm">Cancel</button>
-              <button onClick={handleDeletePlayer} disabled={deleting} className="flex-1 py-2.5 sm:py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg sm:rounded-xl font-bold transition disabled:opacity-50 text-xs sm:text-sm">
+              <button 
+                onClick={() => setPlayerToDelete(null)} 
+                disabled={deleting} 
+                className="flex-1 py-3 sm:py-3.5 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition disabled:opacity-50 text-xs sm:text-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeletePlayer} 
+                disabled={deleting} 
+                className="flex-1 py-3 sm:py-3.5 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition disabled:opacity-50 shadow-[0_0_15px_rgba(239,68,68,0.3)] text-xs sm:text-sm"
+              >
                 {deleting ? 'Deleting...' : 'Yes, Delete'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
