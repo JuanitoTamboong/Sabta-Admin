@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
   UsersIcon, BookOpenIcon, LightningIcon,
-  TargetIcon, ArrowUpRightIcon, CaretRightIcon, 
+  ArrowUpRightIcon, CaretRightIcon, // ✅ Removed TargetIcon
   CheckCircleIcon, PlusIcon, ChartBarIcon,
   CoinsIcon, ShieldCheckIcon, PulseIcon, ShoppingBagIcon,
   ArrowRightIcon

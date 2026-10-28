@@ -3,11 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 
-// FIXED: Changed from './pages/AdminApp' to './AdminApp'
 import AdminApp from './AdminApp'
 
 function App() {
-  const [session, setSession] = useState<any>(null)
+  // ✅ FIXED: Removed the unused 'session' variable to fix the Vercel build error
+  const [, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
