@@ -7,6 +7,7 @@ import {
   GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon
 } from '@phosphor-icons/react'
 import sabtaLogo from '../assets/icons/sabta-logo.png'
+import '../css/AdminLayout.css'
 
 const NAV_ITEMS = [
   { path: '/admin/dashboard', label: 'Dashboard', icon: SquaresFourIcon },
@@ -44,7 +45,6 @@ export default function AdminLayout() {
     navigate('/admin/login')
   }
 
-  // Determine the current page title based on the route
   const currentTitle = NAV_ITEMS.find(item => location.pathname.startsWith(item.path))?.label || 'Dashboard'
 
   if (loading) return <div className="min-h-screen bg-[#050505] text-[#ccff00] flex items-center justify-center font-mono">VERIFYING CLEARANCE...</div>
@@ -93,18 +93,28 @@ export default function AdminLayout() {
       </aside>
 
       {/* MAIN AREA */}
-      <main className="flex-1 lg:ml-64 pb-24 lg:pb-0">
+      <main className="flex-1 lg:ml-64 pb-24 lg:pb-0 flex flex-col min-h-screen">
         <header className="sticky top-0 z-20 bg-[#050505]/90 backdrop-blur-md border-b border-white/10 px-4 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-lg lg:text-2xl font-bold leading-tight text-white">{currentTitle}</h1>
-              <p className="text-xs text-gray-500">System Administrator • {profile?.display_name}</p>
-            </div>
+          <div className="flex items-center justify-between gap-4">
+            
             <div className="flex items-center gap-3">
+              <div>
+                <h1 className="text-lg lg:text-2xl font-bold leading-tight text-white">{currentTitle}</h1>
+                <p className="text-[10px] lg:text-xs text-gray-500 hidden sm:block">System Administrator • {profile?.display_name}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* ✅ MOBILE LOGOUT BUTTON ADDED HERE */}
+              <button onClick={handleLogout} className="lg:hidden p-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 hover:bg-red-500/20 transition">
+                <SignOutIcon weight="bold" className="w-5 h-5" />
+              </button>
+
               <button className="relative p-2 bg-[#0f1014] border border-white/10 rounded-xl hover:bg-white/5 transition">
                 <BellIcon weight="duotone" className="w-5 h-5 text-gray-300" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-[#ff00a0] rounded-full animate-pulse" />
               </button>
+              
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff00a0] to-purple-600 border-2 border-white/20 flex items-center justify-center font-bold text-black text-sm">
                 A
               </div>
@@ -112,14 +122,36 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <div className="p-4 lg:p-8 relative">
+        {/* CONTENT PADDING */}
+        <div className="p-4 lg:p-8 relative flex-1 w-full max-w-full overflow-x-hidden">
           <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#00f0ff]/5 rounded-full blur-[120px] pointer-events-none" />
-          <div className="relative z-10">
-            {/* THIS IS WHERE CHILD ROUTES RENDER */}
+          
+          <div className="relative z-10 h-full admin-page-enter">
             <Outlet />
           </div>
         </div>
       </main>
+
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-2 pb-safe">
+        {NAV_ITEMS.slice(0, 5).map((item) => {
+          const isActive = location.pathname.startsWith(item.path)
+          const Icon = item.icon
+          return (
+            <button
+              key={item.path}
+              onClick={() => navigate(item.path)}
+              className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-[#ccff00] -translate-y-1' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <div className={`p-1.5 rounded-xl transition ${isActive ? 'bg-[#ccff00]/10' : 'bg-transparent'}`}>
+                <Icon weight={isActive ? 'fill' : 'duotone'} size={20} />
+              </div>
+              <span className="text-[9px] font-bold tracking-wider">{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
     </div>
   )
 }

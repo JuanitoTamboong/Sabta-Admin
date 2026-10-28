@@ -1,6 +1,6 @@
 // src/pages/AdminQuizzes.tsx
 import { useEffect, useState, useRef } from 'react'
-import { createPortal } from 'react-dom' // ✅ ADDED PORTAL
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { 
   PlusIcon, TrashIcon, UploadSimpleIcon, 
@@ -261,228 +261,275 @@ export default function AdminQuizzes() {
   }
 
   return (
-    <div className="relative z-10 max-w-6xl mx-auto p-4 md:p-0">
+    <div className="relative z-10 max-w-6xl mx-auto sm:p-4 md:p-0 admin-page-enter">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
         <div>
           <button 
             onClick={() => navigate('/admin')} 
-            className="flex items-center gap-2 text-gray-400 hover:text-white transition mb-2 text-sm font-bold bg-white/5 px-3 py-1.5 rounded-lg w-fit"
+            className="flex items-center gap-2 text-gray-400 hover:text-white transition mb-3 text-xs sm:text-sm font-bold bg-white/5 px-3 py-1.5 rounded-lg w-fit"
           >
             <ArrowLeftIcon weight="bold" /> Back to Command Center
           </button>
-          <h1 className="text-3xl font-black text-white">Quiz Manager</h1>
-          <p className="text-gray-400 text-sm mt-1">Create new quizzes, upload from documents, or manage existing content.</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-white">Quiz Manager</h1>
+          <p className="text-gray-400 text-xs sm:text-sm mt-1">Create new quizzes, upload from documents, or manage existing content.</p>
         </div>
       </div>
 
       {/* PREMIUM TABS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 md:mb-8">
         <button 
           onClick={() => setActiveTab('list')} 
-          className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
+          className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'list' ? 'bg-[#ccff00]/10 border-[#ccff00]/50 shadow-[0_0_20px_rgba(204,255,0,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
-          <div className={`p-3 rounded-xl ${activeTab === 'list' ? 'bg-[#ccff00] text-black' : 'bg-white/5 text-gray-400'}`}>
-            <ListDashesIcon weight="bold" size={24} />
+          <div className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${activeTab === 'list' ? 'bg-[#ccff00] text-black' : 'bg-white/5 text-gray-400'}`}>
+            <ListDashesIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
           </div>
           <div>
-            <h3 className={`font-bold text-lg ${activeTab === 'list' ? 'text-[#ccff00]' : 'text-white'}`}>All Quizzes</h3>
-            <p className="text-xs text-gray-400 mt-1">View, manage, and delete existing quizzes.</p>
+            <h3 className={`font-bold text-sm sm:text-lg ${activeTab === 'list' ? 'text-[#ccff00]' : 'text-white'}`}>All Quizzes</h3>
+            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">View, manage, and delete existing quizzes.</p>
           </div>
         </button>
 
         <button 
           onClick={() => setActiveTab('create')} 
-          className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
+          className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'create' ? 'bg-[#00f0ff]/10 border-[#00f0ff]/50 shadow-[0_0_20px_rgba(0,240,255,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
-          <div className={`p-3 rounded-xl ${activeTab === 'create' ? 'bg-[#00f0ff] text-black' : 'bg-white/5 text-gray-400'}`}>
-            <PlusIcon weight="bold" size={24} />
+          <div className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${activeTab === 'create' ? 'bg-[#00f0ff] text-black' : 'bg-white/5 text-gray-400'}`}>
+            <PlusIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
           </div>
           <div>
-            <h3 className={`font-bold text-lg ${activeTab === 'create' ? 'text-[#00f0ff]' : 'text-white'}`}>Create Manual</h3>
-            <p className="text-xs text-gray-400 mt-1">Write a new question and publish instantly.</p>
+            <h3 className={`font-bold text-sm sm:text-lg ${activeTab === 'create' ? 'text-[#00f0ff]' : 'text-white'}`}>Create Manual</h3>
+            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">Write a new question and publish instantly.</p>
           </div>
         </button>
 
         <button 
           onClick={() => setActiveTab('upload')} 
-          className={`flex items-start gap-4 p-5 rounded-2xl border transition-all text-left ${
+          className={`flex items-center sm:items-start gap-3 sm:gap-4 p-4 sm:p-5 rounded-2xl border transition-all text-left ${
             activeTab === 'upload' ? 'bg-[#ff00a0]/10 border-[#ff00a0]/50 shadow-[0_0_20px_rgba(255,0,160,0.1)]' : 'bg-[#0f1014] border-white/10 hover:border-white/20 hover:bg-white/5'
           }`}
         >
-          <div className={`p-3 rounded-xl ${activeTab === 'upload' ? 'bg-[#ff00a0] text-black' : 'bg-white/5 text-gray-400'}`}>
-            <UploadSimpleIcon weight="bold" size={24} />
+          <div className={`p-2.5 sm:p-3 rounded-xl shrink-0 ${activeTab === 'upload' ? 'bg-[#ff00a0] text-black' : 'bg-white/5 text-gray-400'}`}>
+            <UploadSimpleIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
           </div>
           <div>
-            <h3 className={`font-bold text-lg ${activeTab === 'upload' ? 'text-[#ff00a0]' : 'text-white'}`}>Bulk Upload</h3>
-            <p className="text-xs text-gray-400 mt-1">Import multiple quizzes from a text file.</p>
+            <h3 className={`font-bold text-sm sm:text-lg ${activeTab === 'upload' ? 'text-[#ff00a0]' : 'text-white'}`}>Bulk Upload</h3>
+            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">Import multiple quizzes from a text file.</p>
           </div>
         </button>
       </div>
 
       {/* --- TAB 1: LIST QUIZZES --- */}
       {activeTab === 'list' && (
-        <div className="bg-[#0f1014] border border-white/10 rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
+        <div className="bg-transparent sm:bg-[#0f1014] sm:border sm:border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
           {loading ? (
-             <div className="py-20 text-center">
+             <div className="py-20 text-center bg-[#0f1014] rounded-2xl">
                <p className="text-[#ccff00] font-mono animate-pulse tracking-widest text-sm">LOADING DATABASE...</p>
              </div>
           ) : quizzes.length === 0 ? (
-            <div className="py-24 text-center">
-              <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center mx-auto mb-4">
-                <GameControllerIcon weight="duotone" className="w-10 h-10 text-gray-600" />
+            <div className="py-20 sm:py-24 text-center px-4 bg-[#0f1014] rounded-2xl border border-white/10 sm:border-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/5 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-4">
+                <GameControllerIcon weight="duotone" className="w-8 h-8 sm:w-10 sm:h-10 text-gray-600" />
               </div>
-              <p className="text-white font-bold text-lg mb-1">No Quizzes Found</p>
-              <p className="text-gray-500 text-sm mb-6">Your database is empty. Create your first quiz to get started.</p>
-              <button onClick={() => setActiveTab('create')} className="bg-[#ccff00] text-black px-6 py-2.5 rounded-xl font-bold hover:bg-white transition">
+              <p className="text-white font-bold text-base sm:text-lg mb-1">No Quizzes Found</p>
+              <p className="text-gray-500 text-xs sm:text-sm mb-6 max-w-xs mx-auto">Your database is empty. Create your first quiz to get started.</p>
+              <button onClick={() => setActiveTab('create')} className="bg-[#ccff00] text-black px-6 py-2.5 rounded-xl font-bold hover:bg-white transition text-sm">
                 Create New Quiz
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-black/40 border-b border-white/10 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
-                  <tr>
-                    <th className="py-4 px-6">Quiz Details</th>
-                    <th className="py-4 px-4">Tier / Difficulty</th>
-                    <th className="py-4 px-4 text-center">Questions</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {quizzes.map(q => (
-                    <tr key={q.id} className="hover:bg-white/[0.02] transition group">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
-                            <GameControllerIcon weight="fill" className="text-[#00f0ff] w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="font-bold text-white text-sm group-hover:text-[#00f0ff] transition">{q.title}</p>
-                            <p className="text-xs text-[#ff00a0] font-semibold">{q.category}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                            {q.age_category}
-                          </span>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                            q.difficulty === 'hard' ? 'text-[#ff00a0]' :
-                            q.difficulty === 'intermediate' ? 'text-[#ff9500]' :
-                            'text-[#ccff00]'
-                          }`}>
-                            {q.difficulty}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className="inline-flex items-center gap-1.5 bg-black/50 text-gray-300 text-xs px-3 py-1.5 rounded-lg border border-white/5">
-                          <FileTextIcon /> {q.questions?.[0]?.count || 0}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => handleViewQuiz(q)} className="p-2.5 text-[#00f0ff] bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 rounded-xl transition" title="View Quiz Questions">
-                            <EyeIcon size={20} weight="bold" />
-                          </button>
-                          <button onClick={() => handleDeleteQuiz(q.id)} className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition" title="Delete Quiz">
-                            <TrashIcon size={20} weight="bold" />
-                          </button>
-                        </div>
-                      </td>
+            <>
+              {/* ✅ DESKTOP TABLE */}
+              <div className="hidden sm:block overflow-x-auto admin-custom-scrollbar">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead className="bg-black/40 border-b border-white/10 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                    <tr>
+                      <th className="py-4 px-6">Quiz Details</th>
+                      <th className="py-4 px-4">Tier / Difficulty</th>
+                      <th className="py-4 px-4 text-center">Questions</th>
+                      <th className="py-4 px-6 text-right">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {quizzes.map(q => (
+                      <tr key={q.id} className="hover:bg-white/[0.02] transition group">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
+                              <GameControllerIcon weight="fill" className="text-[#00f0ff] w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className="font-bold text-white text-sm group-hover:text-[#00f0ff] transition line-clamp-1">{q.title}</p>
+                              <p className="text-xs text-[#ff00a0] font-semibold">{q.category}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className="text-[10px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                              {q.age_category}
+                            </span>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                              q.difficulty === 'hard' ? 'text-[#ff00a0]' :
+                              q.difficulty === 'intermediate' ? 'text-[#ff9500]' :
+                              'text-[#ccff00]'
+                            }`}>
+                              {q.difficulty}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className="inline-flex items-center gap-1.5 bg-black/50 text-gray-300 text-xs px-3 py-1.5 rounded-lg border border-white/5">
+                            <FileTextIcon /> {q.questions?.[0]?.count || 0}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button onClick={() => handleViewQuiz(q)} className="p-2.5 text-[#00f0ff] bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 rounded-xl transition" title="View Quiz Questions">
+                              <EyeIcon size={20} weight="bold" />
+                            </button>
+                            <button onClick={() => handleDeleteQuiz(q.id)} className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition" title="Delete Quiz">
+                              <TrashIcon size={20} weight="bold" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ✅ MOBILE CARD LIST (Fits perfectly on narrow screens) */}
+              <div className="sm:hidden flex flex-col gap-3">
+                {quizzes.map(q => (
+                  <div key={q.id} className="bg-[#0f1014] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
+                        <GameControllerIcon weight="fill" className="text-[#00f0ff] w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-white text-sm line-clamp-2 leading-tight">{q.title}</p>
+                        <p className="text-[10px] text-[#ff00a0] font-semibold mt-1">{q.category}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                          {q.age_category}
+                        </span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider ${
+                          q.difficulty === 'hard' ? 'text-[#ff00a0]' :
+                          q.difficulty === 'intermediate' ? 'text-[#ff9500]' :
+                          'text-[#ccff00]'
+                        }`}>
+                          {q.difficulty}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-gray-400 text-[10px] bg-black/50 px-2 py-0.5 rounded-md border border-white/5">
+                          <FileTextIcon size={10} /> {q.questions?.[0]?.count || 0}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleViewQuiz(q)} className="p-2 text-[#00f0ff] bg-[#00f0ff]/10 rounded-lg">
+                          <EyeIcon size={16} weight="bold" />
+                        </button>
+                        <button onClick={() => handleDeleteQuiz(q.id)} className="p-2 text-red-400 bg-red-400/10 rounded-lg">
+                          <TrashIcon size={16} weight="bold" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}
 
       {/* --- TAB 2: MANUAL CREATE --- */}
       {activeTab === 'create' && (
-        <form onSubmit={handleManualCreate} className="bg-[#0f1014] border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl animate-fade-in max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-8 pb-6 border-b border-white/10">
-            <div className="p-3 bg-[#00f0ff]/20 text-[#00f0ff] rounded-xl">
-              <PlusIcon weight="bold" size={24} />
+        <form onSubmit={handleManualCreate} className="bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-2xl animate-fade-in max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-white/10">
+            <div className="p-2 sm:p-3 bg-[#00f0ff]/20 text-[#00f0ff] rounded-lg sm:rounded-xl">
+              <PlusIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Create New Quiz</h2>
-              <p className="text-xs text-gray-400">Manually add a single question to the database.</p>
+              <h2 className="text-lg sm:text-xl font-bold text-white">Create New Quiz</h2>
+              <p className="text-[10px] sm:text-xs text-gray-400">Manually add a single question to the database.</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div>
-              <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Category</label>
-              <input required placeholder="e.g. Pop Culture, Science..." value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" />
+              <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Category</label>
+              <input required placeholder="e.g. Pop Culture, Science..." value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Difficulty</label>
-              <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition">
+              <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Difficulty</label>
+              <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm">
                 <option value="normal">Normal</option><option value="intermediate">Intermediate</option><option value="hard">Hard</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Age Category</label>
-              <select value={ageCategory} onChange={e => setAgeCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition">
+              <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Age Category</label>
+              <select value={ageCategory} onChange={e => setAgeCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm">
                 <option value="kids">Kids</option><option value="teens">Teens</option><option value="adults">Adults</option>
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Timer (Seconds)</label>
-              <input type="number" min="5" max="120" value={manualTimer} onChange={e => setManualTimer(parseInt(e.target.value))} className="w-full bg-black/50 border border-white/10 p-3.5 rounded-xl text-white outline-none focus:border-[#00f0ff] transition" />
+              <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Timer (Seconds)</label>
+              <input type="number" min="5" max="120" value={manualTimer} onChange={e => setManualTimer(parseInt(e.target.value))} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm" />
             </div>
           </div>
 
-          <div className="bg-black/30 p-6 md:p-8 rounded-2xl border border-white/5 mb-8">
-            <h3 className="text-sm font-bold text-white mb-5 flex items-center gap-2">
+          <div className="bg-black/30 p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl border border-white/5 mb-6 sm:mb-8">
+            <h3 className="text-xs sm:text-sm font-bold text-white mb-4 sm:mb-5 flex items-center gap-2">
               <SparkleIcon className="text-[#ccff00]" /> Question Content
             </h3>
             
-            <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Question Text</label>
-            <input required placeholder="e.g. What is the capital of France?" value={qText} onChange={e => setQText(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-4 rounded-xl text-white outline-none focus:border-[#ccff00] mb-6 text-lg font-medium" />
+            <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Question Text</label>
+            <input required placeholder="e.g. What is the capital of France?" value={qText} onChange={e => setQText(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 sm:p-4 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ccff00] mb-4 sm:mb-6 text-sm sm:text-lg font-medium" />
             
-            <label className="text-xs text-gray-400 font-bold mb-2 block uppercase tracking-wider">Options (4 Required)</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Options (4 Required)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">A.</span>
-                <input required placeholder="Option A" value={optA} onChange={e => setOptA(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3.5 pl-10 rounded-xl text-white outline-none focus:border-white/30" />
+                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">A.</span>
+                <input required placeholder="Option A" value={optA} onChange={e => setOptA(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">B.</span>
-                <input required placeholder="Option B" value={optB} onChange={e => setOptB(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3.5 pl-10 rounded-xl text-white outline-none focus:border-white/30" />
+                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">B.</span>
+                <input required placeholder="Option B" value={optB} onChange={e => setOptB(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">C.</span>
-                <input required placeholder="Option C" value={optC} onChange={e => setOptC(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3.5 pl-10 rounded-xl text-white outline-none focus:border-white/30" />
+                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">C.</span>
+                <input required placeholder="Option C" value={optC} onChange={e => setOptC(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">D.</span>
-                <input required placeholder="Option D" value={optD} onChange={e => setOptD(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3.5 pl-10 rounded-xl text-white outline-none focus:border-white/30" />
+                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">D.</span>
+                <input required placeholder="Option D" value={optD} onChange={e => setOptD(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="text-xs text-yellow-500 font-bold mb-2 block uppercase tracking-wider">Hint (Optional)</label>
-                <input placeholder="A clue for the player..." value={manualHint} onChange={e => setManualHint(e.target.value)} className="w-full bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 p-4 rounded-xl outline-none focus:border-yellow-500/50 transition placeholder-yellow-500/30" />
+                <label className="text-[10px] sm:text-xs text-yellow-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Hint (Optional)</label>
+                <input placeholder="A clue for the player..." value={manualHint} onChange={e => setManualHint(e.target.value)} className="w-full bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 p-3 sm:p-4 rounded-lg sm:rounded-xl outline-none focus:border-yellow-500/50 transition placeholder-yellow-500/30 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-green-500 font-bold mb-2 block uppercase tracking-wider">Correct Answer</label>
-                <input required placeholder="Must match an option exactly" value={correct} onChange={e => setCorrect(e.target.value)} className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-4 rounded-xl font-bold outline-none focus:border-green-500 transition placeholder-green-500/30" />
+                <label className="text-[10px] sm:text-xs text-green-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Correct Answer</label>
+                <input required placeholder="Must match an option exactly" value={correct} onChange={e => setCorrect(e.target.value)} className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-3 sm:p-4 rounded-lg sm:rounded-xl font-bold outline-none focus:border-green-500 transition placeholder-green-500/30 text-sm" />
               </div>
             </div>
           </div>
 
-          <button type="submit" className="bg-[#ccff00] text-black px-8 py-4 rounded-xl font-black text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200">
+          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200">
             Publish Quiz
           </button>
         </form>
@@ -490,48 +537,48 @@ export default function AdminQuizzes() {
 
       {/* --- TAB 3: DOCUMENT UPLOAD --- */}
       {activeTab === 'upload' && (
-        <div className="bg-[#0f1014] border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl animate-fade-in max-w-5xl mx-auto">
+        <div className="bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-2xl animate-fade-in max-w-5xl mx-auto">
           
-          <div className="flex items-center gap-3 mb-8 pb-6 border-b border-white/10">
-            <div className="p-3 bg-[#ff00a0]/20 text-[#ff00a0] rounded-xl">
-              <UploadSimpleIcon weight="bold" size={24} />
+          <div className="flex items-center gap-3 mb-6 sm:mb-8 pb-4 sm:pb-6 border-b border-white/10">
+            <div className="p-2 sm:p-3 bg-[#ff00a0]/20 text-[#ff00a0] rounded-lg sm:rounded-xl">
+              <UploadSimpleIcon weight="bold" size={20} className="sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Bulk Upload</h2>
-              <p className="text-xs text-gray-400">Import multiple quizzes and questions instantly.</p>
+              <h2 className="text-lg sm:text-xl font-bold text-white">Bulk Upload</h2>
+              <p className="text-[10px] sm:text-xs text-gray-400">Import multiple quizzes and questions instantly.</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-10">
             
             {/* LEFT: SETTINGS & UPLOAD */}
             <div>
-              <div className="mb-6 p-5 bg-black/30 border border-white/5 rounded-2xl">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+              <div className="mb-4 sm:mb-6 p-4 sm:p-5 bg-black/30 border border-white/5 rounded-xl sm:rounded-2xl">
+                <h3 className="text-xs sm:text-sm font-bold text-white mb-3 sm:mb-4 flex items-center gap-2">
                   <ClockIcon className="text-[#ff00a0]" /> Quiz Settings
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Category</label>
-                    <input required placeholder="e.g. Geography, History..." value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0] transition" />
+                    <input required placeholder="e.g. Geography, History..." value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] transition text-sm" />
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Difficulty</label>
-                      <select value={uploadDifficulty} onChange={e => setUploadDifficulty(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]">
+                      <label className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Difficulty</label>
+                      <select value={uploadDifficulty} onChange={e => setUploadDifficulty(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] text-xs">
                         <option value="normal">Normal</option><option value="intermediate">Intermediate</option><option value="hard">Hard</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Age Category</label>
-                      <select value={uploadAgeCategory} onChange={e => setUploadAgeCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]">
+                      <label className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Age Tier</label>
+                      <select value={uploadAgeCategory} onChange={e => setUploadAgeCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] text-xs">
                         <option value="kids">Kids</option><option value="teens">Teens</option><option value="adults">Adults</option>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Timer (Sec)</label>
-                      <input type="number" min="5" max="120" value={uploadTimer} onChange={e => setUploadTimer(parseInt(e.target.value))} className="w-full bg-[#0f1014] border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#ff00a0]" />
+                      <label className="text-[9px] sm:text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Timer (S)</label>
+                      <input type="number" min="5" max="120" value={uploadTimer} onChange={e => setUploadTimer(parseInt(e.target.value))} className="w-full bg-[#0f1014] border border-white/10 p-2 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] text-xs" />
                     </div>
                   </div>
                 </div>
@@ -541,17 +588,17 @@ export default function AdminQuizzes() {
               
               <label 
                 htmlFor="text-upload" 
-                className={`cursor-pointer flex flex-col items-center justify-center w-full py-10 px-4 border-2 border-dashed rounded-3xl transition-all ${
+                className={`cursor-pointer flex flex-col items-center justify-center w-full py-8 sm:py-10 px-4 border-2 border-dashed rounded-xl sm:rounded-3xl transition-all ${
                   selectedFile ? 'border-green-500/50 bg-green-500/5 text-green-400' : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
                 }`}
               >
-                <div className="w-14 h-14 rounded-full bg-black/50 flex items-center justify-center mb-3">
-                  {selectedFile ? <CheckCircleIcon size={28} /> : <UploadSimpleIcon size={28} />}
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/50 flex items-center justify-center mb-2 sm:mb-3">
+                  {selectedFile ? <CheckCircleIcon size={24} className="sm:w-7 sm:h-7" /> : <UploadSimpleIcon size={24} className="sm:w-7 sm:h-7" />}
                 </div>
-                <h3 className="font-bold text-base mb-1">
+                <h3 className="font-bold text-sm sm:text-base mb-1 text-center">
                   {selectedFile ? selectedFile.name : 'Click to select .txt file'}
                 </h3>
-                <p className="text-xs text-gray-400">
+                <p className="text-[10px] sm:text-xs text-gray-400">
                   {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Multiple quizzes are supported.'}
                 </p>
               </label>
@@ -560,43 +607,43 @@ export default function AdminQuizzes() {
                 <button 
                   onClick={handleProcessUpload}
                   disabled={uploading}
-                  className={`mt-4 w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition ${
+                  className={`mt-3 sm:mt-4 w-full py-3 sm:py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition text-sm sm:text-base ${
                     uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-[#ff00a0] text-black hover:bg-white'
                   }`}
                 >
                   {uploading ? (
-                    <><ClockIcon size={20} className="animate-spin" /> Processing...</>
+                    <><ClockIcon size={18} className="animate-spin sm:w-5 sm:h-5" /> Processing...</>
                   ) : (
-                    <><UploadSimpleIcon size={20} weight="bold" /> Upload Now</>
+                    <><UploadSimpleIcon size={18} weight="bold" className="sm:w-5 sm:h-5" /> Upload Now</>
                   )}
                 </button>
               )}
 
               {uploadStatus && (
-                <div className={`mt-4 p-4 rounded-xl border flex items-center gap-3 text-left ${
+                <div className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-xl border flex items-start sm:items-center gap-2 sm:gap-3 text-left ${
                   uploadStatus.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'
                 }`}>
-                  {uploadStatus.type === 'success' ? <CheckCircleIcon size={24} weight="fill" /> : <XCircleIcon size={24} weight="fill" />}
-                  <p className="text-sm font-bold">{uploadStatus.msg}</p>
+                  {uploadStatus.type === 'success' ? <CheckCircleIcon size={20} className="sm:w-6 sm:h-6 shrink-0" weight="fill" /> : <XCircleIcon size={20} className="sm:w-6 sm:h-6 shrink-0" weight="fill" />}
+                  <p className="text-xs sm:text-sm font-bold leading-tight">{uploadStatus.msg}</p>
                 </div>
               )}
             </div>
 
             {/* RIGHT: FORMAT GUIDE */}
-            <div className="flex flex-col">
-              <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+            <div className="flex flex-col mt-4 lg:mt-0">
+              <h3 className="text-xs sm:text-sm font-bold text-white mb-2 sm:mb-3 flex items-center gap-2">
                 <FileTextIcon className="text-gray-400" /> Format Guide
               </h3>
-              <p className="text-xs text-gray-400 mb-4">Ensure your text file matches this exact structure. You can add multiple questions and multiple quizzes.</p>
+              <p className="text-[10px] sm:text-xs text-gray-400 mb-3 sm:mb-4">Ensure your text file matches this exact structure. You can add multiple questions and multiple quizzes.</p>
               
-              <div className="bg-[#050505] border border-white/10 rounded-2xl overflow-hidden flex-1 shadow-inner relative">
-                <div className="absolute top-0 left-0 w-full h-8 bg-black/40 border-b border-white/5 flex items-center px-4 gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
-                  <span className="text-[10px] text-gray-500 font-mono ml-2">example.txt</span>
+              <div className="bg-[#050505] border border-white/10 rounded-xl sm:rounded-2xl overflow-hidden flex-1 shadow-inner relative flex flex-col">
+                <div className="w-full h-7 sm:h-8 bg-black/40 border-b border-white/5 flex items-center px-3 sm:px-4 gap-1.5 shrink-0">
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-500/50" />
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-yellow-500/50" />
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-green-500/50" />
+                  <span className="text-[9px] sm:text-[10px] text-gray-500 font-mono ml-1.5 sm:ml-2">example.txt</span>
                 </div>
-                <pre className="p-5 pt-12 text-xs text-[#00f0ff] font-mono leading-relaxed overflow-x-auto h-full">
+                <pre className="p-3 sm:p-5 text-[10px] sm:text-xs text-[#00f0ff] font-mono leading-relaxed overflow-x-auto flex-1">
 {`Quiz 1:
 Question 1: What is water?
 A. A solid mineral
@@ -640,27 +687,27 @@ Sagot: B`}
         </div>
       )}
 
-      {/* --- ✅ VIEW QUIZ MODAL (PORTAL) --- */}
+      {/* --- VIEW QUIZ MODAL (PORTAL) --- */}
       {viewingQuiz && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-          <div className="bg-[#0a0a0c] border border-white/10 rounded-3xl sm:rounded-[2rem] w-full max-w-4xl shadow-[0_0_50px_rgba(0,240,255,0.1)] relative max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-[#0a0a0c] border border-white/10 rounded-2xl sm:rounded-[2rem] w-full max-w-4xl shadow-[0_0_50px_rgba(0,240,255,0.1)] relative max-h-[90vh] flex flex-col overflow-hidden">
             
             {/* Modal Header */}
-            <div className="p-5 sm:p-8 border-b border-white/10 bg-[#0f1014] relative z-10 shrink-0">
+            <div className="p-4 sm:p-8 border-b border-white/10 bg-[#0f1014] relative z-10 shrink-0">
               <button 
                 onClick={() => setViewingQuiz(null)} 
-                className="absolute top-5 right-5 sm:top-8 sm:right-8 text-gray-400 hover:text-white transition bg-white/5 hover:bg-white/10 p-2 rounded-xl z-20"
+                className="absolute top-4 right-4 sm:top-8 sm:right-8 text-gray-400 hover:text-white transition bg-white/5 hover:bg-white/10 p-1.5 sm:p-2 rounded-lg sm:rounded-xl z-20"
               >
-                <XIcon weight="bold" size={20} />
+                <XIcon weight="bold" size={18} className="sm:w-5 sm:h-5" />
               </button>
               
-              <div className="pr-12">
-                <h2 className="text-xl sm:text-3xl font-black text-white mb-2">{viewingQuiz.title}</h2>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <p className="text-xs sm:text-sm text-[#ff00a0] font-bold uppercase tracking-wider">{viewingQuiz.category}</p>
-                  <span className="text-white/20">•</span>
-                  <span className="text-[10px] sm:text-xs bg-white/10 text-gray-300 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">{viewingQuiz.age_category}</span>
-                  <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 ${
+              <div className="pr-10 sm:pr-12">
+                <h2 className="text-lg sm:text-3xl font-black text-white mb-1.5 sm:mb-2 leading-tight">{viewingQuiz.title}</h2>
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
+                  <p className="text-[10px] sm:text-sm text-[#ff00a0] font-bold uppercase tracking-wider">{viewingQuiz.category}</p>
+                  <span className="text-white/20 hidden sm:block">•</span>
+                  <span className="text-[9px] sm:text-xs bg-white/10 text-gray-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg font-bold uppercase tracking-wider">{viewingQuiz.age_category}</span>
+                  <span className={`text-[9px] sm:text-xs font-bold uppercase tracking-wider px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg bg-white/5 border border-white/10 ${
                     viewingQuiz.difficulty === 'hard' ? 'text-[#ff00a0]' : 
                     viewingQuiz.difficulty === 'intermediate' ? 'text-[#ff9500]' : 
                     'text-[#ccff00]'
@@ -672,7 +719,7 @@ Sagot: B`}
             </div>
             
             {/* Modal Scrollable Body */}
-            <div className="overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar flex-1 bg-[#050505]">
+            <div className="overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 admin-custom-scrollbar flex-1 bg-[#050505]">
               {loadingQuestions ? (
                 <div className="py-20 text-center">
                    <p className="text-[#ccff00] font-mono text-sm animate-pulse">LOADING QUESTIONS...</p>
@@ -683,39 +730,39 @@ Sagot: B`}
                 </div>
               ) : (
                 quizQuestions.map((q, idx) => (
-                  <div key={q.id} className="bg-[#13151a] border border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm">
-                    <div className="flex items-start gap-3 mb-4">
-                      <span className="bg-white/5 text-gray-400 text-xs font-black px-2.5 py-1 rounded-lg shrink-0">Q{idx + 1}</span>
-                      <p className="font-bold text-white text-sm sm:text-base leading-snug pt-0.5">{q.question_text}</p>
+                  <div key={q.id} className="bg-[#13151a] border border-white/5 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
+                    <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
+                      <span className="bg-white/5 text-gray-400 text-[10px] sm:text-xs font-black px-2 py-1 rounded-md sm:rounded-lg shrink-0">Q{idx + 1}</span>
+                      <p className="font-bold text-white text-xs sm:text-base leading-snug pt-0.5">{q.question_text}</p>
                     </div>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                       {q.options.map((opt: string, i: number) => {
                         const isCorrect = opt === q.correct_answer
                         return (
-                          <div key={i} className={`flex items-center gap-3 text-xs sm:text-sm p-3 rounded-xl border ${
+                          <div key={i} className={`flex items-center gap-2 sm:gap-3 text-[11px] sm:text-sm p-2 sm:p-3 rounded-lg sm:rounded-xl border ${
                             isCorrect 
                               ? 'bg-green-500/10 border-green-500/30 text-green-400' 
                               : 'bg-[#0a0a0c] border-white/5 text-gray-400'
                           }`}>
-                            <span className={`w-6 h-6 rounded-md flex items-center justify-center font-bold shrink-0 ${
+                            <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold shrink-0 text-[10px] sm:text-xs ${
                               isCorrect ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'
                             }`}>
                               {String.fromCharCode(65 + i)}
                             </span> 
                             <span className={isCorrect ? 'font-bold' : ''}>{opt}</span>
-                            {isCorrect && <CheckCircleIcon className="ml-auto w-4 h-4 text-green-500 shrink-0" />}
+                            {isCorrect && <CheckCircleIcon className="ml-auto w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500 shrink-0" />}
                           </div>
                         )
                       })}
                     </div>
                     
                     {q.hint && (
-                      <div className="mt-3 bg-yellow-500/5 border border-yellow-500/10 p-3 rounded-xl flex items-start gap-2">
-                        <SparkleIcon weight="fill" className="text-yellow-500 w-4 h-4 mt-0.5 shrink-0" />
+                      <div className="mt-2 sm:mt-3 bg-yellow-500/5 border border-yellow-500/10 p-2 sm:p-3 rounded-lg sm:rounded-xl flex items-start gap-2">
+                        <SparkleIcon weight="fill" className="text-yellow-500 w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 shrink-0" />
                         <div>
-                          <span className="text-[10px] text-yellow-500 font-bold uppercase tracking-wider block mb-0.5">Hint</span>
-                          <p className="text-xs text-yellow-200/70">{q.hint}</p>
+                          <span className="text-[9px] sm:text-[10px] text-yellow-500 font-bold uppercase tracking-wider block mb-0.5">Hint</span>
+                          <p className="text-[10px] sm:text-xs text-yellow-200/70">{q.hint}</p>
                         </div>
                       </div>
                     )}
@@ -726,7 +773,7 @@ Sagot: B`}
             
           </div>
         </div>,
-        document.body // ✅ Renders outside the main layout tree
+        document.body
       )}
 
     </div>
