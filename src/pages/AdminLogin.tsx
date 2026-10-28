@@ -48,7 +48,8 @@ export default function AdminLogin() {
         setError(`Database Error: ${profileError.message}`)
         await supabase.auth.signOut()
       } else if (profile?.role === 'admin') {
-        navigate('/admin/analytics') 
+        // ✅ FIXED: Navigates to dashboard instead of analytics
+        navigate('/admin/dashboard') 
       } else {
         setError('Access Denied. Admin privileges required.')
         await supabase.auth.signOut() 
