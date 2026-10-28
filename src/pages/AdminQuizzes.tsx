@@ -6,17 +6,15 @@ import {
   PlusIcon, TrashIcon, UploadSimpleIcon, 
   FileTextIcon, CheckCircleIcon, XCircleIcon,
   GameControllerIcon, ClockIcon, ListDashesIcon, SparkleIcon,
-  ArrowLeftIcon, EyeIcon, XIcon 
+  EyeIcon, XIcon 
 } from '@phosphor-icons/react'
-import { useNavigate } from 'react-router-dom'
 
 export default function AdminQuizzes() {
-  const navigate = useNavigate()
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'upload'>('list')
   
-  // NEW: Age Filter State
+  // Age Filter State
   const [ageFilter, setAgeFilter] = useState<'all' | 'kids' | 'teens' | 'adults'>('all')
 
   // View Quiz State
@@ -284,7 +282,7 @@ export default function AdminQuizzes() {
     fetchQuizzes()
   }
 
-  // NEW: Filtered Quizzes Logic
+  // Filtered Quizzes Logic
   const filteredQuizzes = quizzes.filter(q => 
     ageFilter === 'all' ? true : q.age_category === ageFilter
   )
@@ -295,12 +293,7 @@ export default function AdminQuizzes() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
         <div>
-          <button 
-            onClick={() => navigate('/admin')} 
-            className="flex items-center gap-2 text-gray-400 hover:text-white transition mb-3 text-xs sm:text-sm font-bold bg-white/5 px-3 py-1.5 rounded-lg w-fit"
-          >
-            <ArrowLeftIcon weight="bold" /> Back to Command Center
-          </button>
+          {/* ✅ REMOVED: Back button is gone */}
           <h1 className="text-2xl sm:text-3xl font-black text-white">Quiz Manager</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">Create new quizzes, upload from documents, or manage existing content.</p>
         </div>
@@ -358,7 +351,7 @@ export default function AdminQuizzes() {
       {activeTab === 'list' && (
         <div className="bg-transparent sm:bg-[#0f1014] sm:border sm:border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
           
-          {/* NEW: AGE FILTER TABS */}
+          {/* AGE FILTER TABS */}
           <div className="p-4 border-b border-white/10 bg-black/20 flex flex-wrap gap-2">
             {['all', 'kids', 'teens', 'adults'].map((tier) => (
               <button
@@ -421,7 +414,6 @@ export default function AdminQuizzes() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex flex-col items-start gap-1">
-                            {/* NEW: COLOR CODED AGE BADGES */}
                             <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                               q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
                               q.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
@@ -475,7 +467,6 @@ export default function AdminQuizzes() {
                     
                     <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
                       <div className="flex items-center gap-2">
-                        {/* NEW: COLOR CODED AGE BADGES (Mobile) */}
                         <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                           q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
                           q.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
@@ -678,7 +669,6 @@ export default function AdminQuizzes() {
                 </button>
               )}
 
-              {/* ✅ FIXED: Removed the X button, relies purely on the auto-dismiss timer */}
               {uploadStatus && (
                 <div className={`mt-3 sm:mt-4 p-3 sm:p-4 rounded-xl border flex items-start sm:items-center gap-2 sm:gap-3 text-left ${
                   uploadStatus.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'

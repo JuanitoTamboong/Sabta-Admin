@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import {
-  MagnifyingGlassIcon, ArrowLeftIcon, UsersIcon, CoinsIcon,
+  MagnifyingGlassIcon, UsersIcon, CoinsIcon,
   LightningIcon, CalendarBlankIcon, ShieldCheckIcon, UserIcon,
   TrashIcon, WarningCircleIcon, XIcon
 } from '@phosphor-icons/react'
@@ -70,9 +70,7 @@ export default function AdminPlayers() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 sm:gap-4 mb-4 sm:mb-8 max-w-7xl mx-auto">
         <div>
-          <button onClick={() => navigate('/admin')} className="flex items-center gap-2 text-gray-400 hover:text-white transition mb-1.5 text-xs sm:text-sm font-bold bg-white/5 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg w-fit">
-            <ArrowLeftIcon weight="bold" className="w-3 h-3 sm:w-4 sm:h-4" /> Back to Command Center
-          </button>
+          {/* ✅ REMOVED: The Back to Command Center button is gone */}
           <h1 className="text-lg sm:text-3xl font-black text-white">Manage Players</h1>
           <p className="text-gray-400 text-[10px] sm:text-sm mt-0.5 sm:mt-1">View all registered players, their balances, and account details.</p>
         </div>
@@ -140,7 +138,6 @@ export default function AdminPlayers() {
                   <TrashIcon weight="bold" className="w-3 h-3 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* ✅ FIXED: Compact Header */}
                 <div className="flex flex-col items-center text-center gap-1 sm:flex-row sm:items-center sm:text-left sm:gap-4 mb-2 sm:mb-5 relative z-10 w-full pr-0 sm:pr-8 mt-1 sm:mt-0">
                   <div className="w-8 h-8 sm:w-14 sm:h-14 rounded-full bg-gradient-to-br from-[#00f0ff] to-blue-600 flex items-center justify-center font-bold text-black text-xs sm:text-xl shrink-0 uppercase overflow-hidden shadow-lg border border-[#0f1014] sm:border-2">
                     {player.avatar_url ? (
@@ -160,7 +157,6 @@ export default function AdminPlayers() {
                   </div>
                 </div>
 
-                {/* ✅ FIXED: Compact Stats */}
                 <div className="grid grid-cols-2 gap-1 sm:gap-2 mb-1.5 sm:mb-4 relative z-10">
                   <div className="bg-black/40 border border-white/5 rounded sm:rounded-xl p-1 sm:p-3 text-center flex flex-col justify-center">
                     <p className="text-[7px] sm:text-[10px] text-gray-500 uppercase font-bold mb-0.5">Points</p>
@@ -176,7 +172,6 @@ export default function AdminPlayers() {
                   </div>
                 </div>
 
-                {/* ✅ FIXED: Compact Footer */}
                 <div className="space-y-0.5 sm:space-y-2 relative z-10 mt-auto">
                   <div className="flex items-center justify-between text-[8px] sm:text-xs text-gray-400 bg-white/5 px-1 py-0.5 sm:px-3 sm:py-2 rounded sm:rounded-lg">
                     <span className="flex items-center gap-0.5 sm:gap-1.5"><UserIcon className="w-2.5 h-2.5 sm:w-4 sm:h-4" /> Tier</span>
