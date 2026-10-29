@@ -1,6 +1,5 @@
 // src/pages/AdminPlayers.tsx
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import {
@@ -10,7 +9,6 @@ import {
 } from '@phosphor-icons/react'
 
 export default function AdminPlayers() {
-  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [players, setPlayers] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -71,7 +69,6 @@ export default function AdminPlayers() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 sm:gap-4 mb-4 sm:mb-8 max-w-7xl mx-auto">
         <div>
-          {/* ✅ REMOVED: The Back to Command Center button is gone */}
           <h1 className="text-lg sm:text-3xl font-black text-white">Manage Players</h1>
           <p className="text-gray-400 text-[10px] sm:text-sm mt-0.5 sm:mt-1">View all registered players, their balances, and account details.</p>
         </div>
