@@ -29,23 +29,28 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: usersData } = await supabase.from('profiles').select('*')
-        const totalUsers = usersData?.length || 0
+        // Fetch all profiles
+        const { data: rawUsersData } = await supabase.from('profiles').select('*')
         
-        const sortedUsers = [...(usersData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        // ✅ FIX: Filter out admins so they don't count as players
+        const usersData = (rawUsersData || []).filter(u => u.role !== 'admin')
+
+        const totalUsers = usersData.length
+        
+        const sortedUsers = [...usersData].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         setRecentUsers(sortedUsers.slice(0, 5))
 
         const weekAgo = new Date(Date.now() - 7 * 86400000)
-        const newUsersThisWeek = (usersData || []).filter(u => new Date(u.created_at) > weekAgo).length
+        const newUsersThisWeek = usersData.filter(u => new Date(u.created_at) > weekAgo).length
 
-        const breakdown = (usersData || []).reduce((acc: any, p) => {
+        const breakdown = usersData.reduce((acc: any, p) => {
           const cat = p.age_category || 'unset'
           acc[cat] = (acc[cat] || 0) + 1
           return acc
         }, {})
         setAgeBreakdown(Object.entries(breakdown).map(([k, v]) => ({ category: k, count: v })))
 
-        const coinsDistributed = (usersData || []).reduce((acc, user) => acc + (user.coins || 0), 0)
+        const coinsDistributed = usersData.reduce((acc, user) => acc + (user.coins || 0), 0)
 
         const { count: totalQuizzes } = await supabase.from('quizzes').select('id', { count: 'exact', head: true })
 

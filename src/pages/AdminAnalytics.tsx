@@ -22,7 +22,8 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      const { data: profiles } = await supabase.from('profiles').select('age_category, coins')
+      // ✅ FIX: Fetch only players, exclude admins
+      const { data: profiles } = await supabase.from('profiles').select('age_category, coins').eq('role', 'player')
       const { count: quizCount } = await supabase.from('quizzes').select('*', { count: 'exact', head: true })
       const { data: attempts } = await supabase.from('quiz_attempts').select('accuracy')
 

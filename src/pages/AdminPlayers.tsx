@@ -25,6 +25,7 @@ export default function AdminPlayers() {
     const { data } = await supabase
       .from('profiles')
       .select('*')
+      .eq('role', 'player') // ✅ FIX: Only fetch actual players, hiding admins
       .order('created_at', { ascending: false })
 
     if (data) setPlayers(data)
