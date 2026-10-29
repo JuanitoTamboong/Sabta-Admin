@@ -22,7 +22,7 @@ export default function AdminCosmetics() {
     fetchItems()
   }, [])
 
-  // ✅ FIX: Automatically hide the toast after 3 seconds
+  // Automatically hide the toast after 3 seconds
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => {
@@ -39,14 +39,40 @@ export default function AdminCosmetics() {
     setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this item?")) return
+  const handleDelete = async (item: any) => {
+    if (!confirm("Are you sure you want to delete this item? This will also remove it from any player who owns it.")) return
+    
     try {
-      await supabase.from('cosmetic_items').delete().eq('id', id)
-      setToast({ type: 'success', msg: 'Item deleted.' })
-      fetchItems()
-    } catch (err) {
-      setToast({ type: 'error', msg: 'Failed to delete item.' })
+      // 1. Try to delete the file from Supabase Storage. 
+      if (item.preview_url && item.preview_url.includes('/storage/v1/object/public/cosmetics/')) {
+        const filePath = item.preview_url.split('/cosmetics/')[1]
+        if (filePath) {
+          const { error: storageError } = await supabase.storage.from('cosmetics').remove([filePath])
+          if (storageError) {
+            console.warn("Storage file could not be deleted (might already be missing):", storageError.message)
+          }
+        }
+      }
+
+      // 2. Delete the record from the database.
+      const { error: dbError } = await supabase.from('cosmetic_items').delete().eq('id', item.id)
+      
+      if (dbError) {
+        // ✅ This will now tell you exactly if the SQL fix hasn't applied yet
+        console.error("Database delete failed:", dbError)
+        if (dbError.code === '23503') {
+          throw new Error("Database is still blocking this! Run the SQL fix to add ON DELETE CASCADE.")
+        }
+        throw dbError
+      }
+
+      // 3. Update local state instantly so it disappears from the screen
+      setItems((prevItems) => prevItems.filter(i => i.id !== item.id))
+      
+      setToast({ type: 'success', msg: 'Item deleted successfully.' })
+    } catch (err: any) {
+      console.error("Delete failed:", err)
+      setToast({ type: 'error', msg: err.message || 'Failed to delete item.' })
     }
   }
 
@@ -136,7 +162,7 @@ export default function AdminCosmetics() {
                     <button onClick={() => openEditModal(item)} className="flex-1 bg-white/5 hover:bg-white/10 py-1.5 sm:py-2 rounded-lg sm:rounded-xl font-bold text-[10px] sm:text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition text-gray-300">
                       <PencilSimpleIcon weight="bold" className="w-3 h-3 sm:w-4 sm:h-4" /> Edit
                     </button>
-                    <button onClick={() => handleDelete(item.id)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition">
+                    <button onClick={() => handleDelete(item)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition">
                       <TrashIcon weight="bold" className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                   </div>
@@ -158,7 +184,7 @@ export default function AdminCosmetics() {
         }}
       />
 
-      {/* ✅ TOAST (Now automatically disappears after 3 seconds) */}
+      {/* TOAST */}
       {toast && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[10000] px-4 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-2xl border flex items-center gap-2 sm:gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
           toast.type === 'success' ? 'bg-[#0f1014] border-green-500/30 text-green-400' : 'bg-[#0f1014] border-red-500/30 text-red-400'
