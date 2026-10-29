@@ -54,7 +54,12 @@ export default function AdminLayout() {
       const today = new Date().toISOString().split('T')[0]
       
       const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
-      const { data: attempts } = await supabase.from('quiz_attempts').select('*, profiles(display_name)').order('created_at', { ascending: false }).limit(5)
+      
+      // ✅ Added correct_answers, incorrect_answers, unanswered_questions to the select
+      const { data: attempts } = await supabase.from('quiz_attempts')
+        .select('*, profiles(display_name), correct_answers, incorrect_answers, unanswered_questions')
+        .order('created_at', { ascending: false })
+        .limit(5)
 
       const newNotifs: any[] = []
       let newTodayCount = 0 // ✅ Counter for today's events
@@ -78,10 +83,16 @@ export default function AdminLayout() {
         const isToday = a.created_at.startsWith(today)
         if (isToday) newTodayCount++
 
+        // ✅ Calculate accuracy manually since it's not a column in the DB
+        const totalQuestions = (a.correct_answers || 0) + (a.incorrect_answers || 0) + (a.unanswered_questions || 0);
+        const calculatedAccuracy = totalQuestions > 0 
+          ? Math.round(((a.correct_answers || 0) / totalQuestions) * 100) 
+          : 0;
+
         newNotifs.push({
           id: `attempt-${a.id}`,
           title: 'Quiz Completed',
-          message: `${a.profiles?.display_name || 'A player'} scored ${a.accuracy || 0}% on a quiz.`,
+          message: `${a.profiles?.display_name || 'A player'} scored ${calculatedAccuracy}% on a quiz.`, // ✅ Used calculated value
           date: new Date(a.created_at),
           icon: CheckCircleIcon,
           color: '#ccff00',
