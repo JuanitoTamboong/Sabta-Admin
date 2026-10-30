@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import {
   SquaresFourIcon, BookOpenIcon, UsersIcon, ChartLineUpIcon,
   GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon,
-  CheckCircleIcon, XIcon
+  CheckCircleIcon, XIcon, MedalIcon
 } from '@phosphor-icons/react'
 import sabtaLogo from '../assets/icons/sabta-logo.png'
 import '../css/AdminLayout.css'
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { path: '/admin/users', label: 'Players', icon: UsersIcon },
   { path: '/admin/analytics', label: 'Analytics', icon: ChartLineUpIcon },
   { path: '/admin/cosmetics', label: 'Cosmetics', icon: GiftIcon },
+  { path: '/admin/badges', label: 'Badges', icon: MedalIcon },
 ]
 
 export default function AdminLayout() {
@@ -28,7 +29,7 @@ export default function AdminLayout() {
   // Notifications State
   const [notifications, setNotifications] = useState<any[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0) // ✅ New state for count
+  const [unreadCount, setUnreadCount] = useState(0)
   const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,14 +56,13 @@ export default function AdminLayout() {
       
       const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
       
-      // ✅ Added correct_answers, incorrect_answers, unanswered_questions to the select
       const { data: attempts } = await supabase.from('quiz_attempts')
         .select('*, profiles(display_name), correct_answers, incorrect_answers, unanswered_questions')
         .order('created_at', { ascending: false })
         .limit(5)
 
       const newNotifs: any[] = []
-      let newTodayCount = 0 // ✅ Counter for today's events
+      let newTodayCount = 0
       
       usersData?.forEach(u => {
         const isToday = u.created_at.startsWith(today)
@@ -83,7 +83,6 @@ export default function AdminLayout() {
         const isToday = a.created_at.startsWith(today)
         if (isToday) newTodayCount++
 
-        // ✅ Calculate accuracy manually since it's not a column in the DB
         const totalQuestions = (a.correct_answers || 0) + (a.incorrect_answers || 0) + (a.unanswered_questions || 0);
         const calculatedAccuracy = totalQuestions > 0 
           ? Math.round(((a.correct_answers || 0) / totalQuestions) * 100) 
@@ -92,7 +91,7 @@ export default function AdminLayout() {
         newNotifs.push({
           id: `attempt-${a.id}`,
           title: 'Quiz Completed',
-          message: `${a.profiles?.display_name || 'A player'} scored ${calculatedAccuracy}% on a quiz.`, // ✅ Used calculated value
+          message: `${a.profiles?.display_name || 'A player'} scored ${calculatedAccuracy}% on a quiz.`,
           date: new Date(a.created_at),
           icon: CheckCircleIcon,
           color: '#ccff00',
@@ -102,7 +101,7 @@ export default function AdminLayout() {
 
       newNotifs.sort((a, b) => b.date.getTime() - a.date.getTime())
       setNotifications(newNotifs)
-      setUnreadCount(newTodayCount) // ✅ Set the count
+      setUnreadCount(newTodayCount)
     }
 
     if (!loading) fetchNotifications()
@@ -119,11 +118,10 @@ export default function AdminLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // ✅ Handle opening the bell and clearing the count
   const toggleNotifications = () => {
     setShowNotifications(!showNotifications)
     if (!showNotifications) {
-      setUnreadCount(0) // Clear count when opened
+      setUnreadCount(0)
     }
   }
 
@@ -196,7 +194,6 @@ export default function AdminLayout() {
                 <SignOutIcon weight="bold" className="w-5 h-5" />
               </button>
 
-              {/* ✅ FIXED: Notification Bell with Numbered Badge */}
               <div className="relative" ref={notifRef}>
                 <button 
                   onClick={toggleNotifications} 
@@ -204,7 +201,6 @@ export default function AdminLayout() {
                 >
                   <BellIcon weight="duotone" className={`w-5 h-5 ${showNotifications ? 'text-[#ccff00]' : 'text-gray-300'}`} />
                   
-                  {/* Numbered Badge */}
                   {unreadCount > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 bg-[#ff00a0] text-white text-[9px] font-bold h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-[#050505] shadow-lg">
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -232,7 +228,7 @@ export default function AdminLayout() {
         </div>
       </main>
 
-      {/* ✅ NOTIFICATION DROPDOWN PORTAL */}
+      {/* NOTIFICATION DROPDOWN PORTAL */}
       {showNotifications && createPortal(
         <>
           <div className="fixed inset-0 z-[100] bg-black/20 sm:hidden" onClick={() => setShowNotifications(false)} />
@@ -281,21 +277,21 @@ export default function AdminLayout() {
         document.body
       )}
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-2 pb-safe">
-        {NAV_ITEMS.slice(0, 5).map((item) => {
+      {/* MOBILE BOTTOM NAVIGATION BAR (Updated for 6 items) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-1 pb-safe">
+        {NAV_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
           const Icon = item.icon
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center gap-1 w-full py-1 transition-all ${isActive ? 'text-[#ccff00] -translate-y-1' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex flex-col items-center justify-center gap-1 w-full py-1 transition-all ${isActive ? 'text-[#ccff00] -translate-y-1' : 'text-gray-500 hover:text-gray-300'}`}
             >
-              <div className={`p-1.5 rounded-xl transition ${isActive ? 'bg-[#ccff00]/10' : 'bg-transparent'}`}>
-                <Icon weight={isActive ? 'fill' : 'duotone'} size={20} />
+              <div className={`p-1 rounded-xl transition ${isActive ? 'bg-[#ccff00]/10' : 'bg-transparent'}`}>
+                <Icon weight={isActive ? 'fill' : 'duotone'} size={18} />
               </div>
-              <span className="text-[9px] font-bold tracking-wider">{item.label}</span>
+              <span className="text-[8px] font-bold tracking-wider">{item.label}</span>
             </button>
           )
         })}

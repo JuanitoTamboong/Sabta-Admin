@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 
 import AdminLogin from './pages/AdminLogin'
-import AdminDashboard from './pages/AdminDasboard' // Fixed spelling based on your code
+import AdminDashboard from './pages/AdminDasboard'
 import AdminQuizzes from './pages/AdminQuizzes'
 import AdminAnalytics from './pages/AdminAnalytics'
 import AdminLayout from './pages/AdminLayout'
 
-// ✅ IMPORT THE REAL PAGES HERE
 import AdminPlayers from './pages/AdminPlayers'
-import AdminCosmetics from './pages/AdminCosmetics' // ✅ Added Cosmetics Import
+import AdminCosmetics from './pages/AdminCosmetics'
+import AdminBadges from './pages/AdminBadges' // 🔧 Added Import
 
 export default function AdminApp() {
   const [session, setSession] = useState<any>(null)
@@ -61,6 +61,7 @@ export default function AdminApp() {
         <Route path="analytics" element={<AdminAnalytics />} />
         <Route path="users" element={<AdminPlayers />} />
         <Route path="cosmetics" element={<AdminCosmetics />} />
+        <Route path="badges" element={<AdminBadges />} /> {/* 🔧 Added Route */}
       </Route>
       
       {/* 3. Fallback */}
