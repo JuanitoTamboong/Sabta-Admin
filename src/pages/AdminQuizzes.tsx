@@ -39,6 +39,10 @@ export default function AdminQuizzes() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   
+  // 🔧 File vs Paste State
+  const [uploadMode, setUploadMode] = useState<'file' | 'paste'>('file')
+  const [pastedText, setPastedText] = useState('')
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -66,7 +70,6 @@ export default function AdminQuizzes() {
     }
   }, [uploadStatus]);
 
-  // Clear status when switching to the upload tab
   const handleTabChange = (tab: 'list' | 'create' | 'upload') => {
     setActiveTab(tab);
     if (tab === 'upload') {
@@ -142,7 +145,6 @@ export default function AdminQuizzes() {
       })
       if (qError) throw qError
 
-      // Show success message when created manually
       setUploadStatus({ type: 'success', msg: "Quiz published successfully!" })
       
       setActiveTab('list')
@@ -162,118 +164,129 @@ export default function AdminQuizzes() {
     }
   }
 
-  const handleProcessUpload = async () => {
-    if (!selectedFile) return
+  const processTextData = async (text: string) => {
+    try {
+      const quizBlocks = text.split(/(?=(?:Quiz|Pagsusulit) \d+:)/i).filter(block => block.trim().length > 0)
 
-    setUploading(true)
-    setUploadStatus(null)
-    
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      try {
-        const text = event.target?.result as string
-        const quizBlocks = text.split(/(?=(?:Quiz|Pagsusulit) \d+:)/i).filter(block => block.trim().length > 0)
+      let totalQuestionsAdded = 0
+      let totalQuestionsSkipped = 0
+      let totalQuizzesAdded = 0
+      const finalUploadCategory = uploadCategory.trim() || 'General Knowledge'
 
-        let totalQuestionsAdded = 0
-        let totalQuestionsSkipped = 0
-        let totalQuizzesAdded = 0
-        const finalUploadCategory = uploadCategory.trim() || 'General Knowledge'
+      for (let i = 0; i < quizBlocks.length; i++) {
+        const blockText = quizBlocks[i]
+        const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
+        const parsedQuestions = []
 
-        for (let i = 0; i < quizBlocks.length; i++) {
-          const blockText = quizBlocks[i]
-          const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
-          const parsedQuestions = []
+        for (const qBlock of questionBlocks) {
+          const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
+          if (lines.length === 0) continue
 
-          for (const qBlock of questionBlocks) {
-            const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
-            if (lines.length === 0) continue
+          const question_text = lines[0].replace(/^(?:Question|Tanong) \d+:\s*/i, '').trim()
+          const options = lines.filter(l => /^[A-D]\./.test(l)).map(l => l.replace(/^[A-D]\.\s*/, '')) 
 
-            const question_text = lines[0].replace(/^(?:Question|Tanong) \d+:\s*/i, '').trim()
-            const options = lines.filter(l => /^[A-D]\./.test(l)).map(l => l.replace(/^[A-D]\.\s*/, '')) 
+          const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
+          const hint = hintLine ? hintLine.substring(5).trim() : null
 
-            const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
-            const hint = hintLine ? hintLine.substring(5).trim() : null
+          const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:') || l.toLowerCase().startsWith('sagot:'))
+          const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
+          
+          const letterIndex = answerLetter.charCodeAt(0) - 65 
+          const correct_answer = options[letterIndex] || ''
 
-            const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:') || l.toLowerCase().startsWith('sagot:'))
-            const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
+          if (question_text && options.length === 4 && correct_answer) {
+            const qHash = generateHash(`${question_text}|${[...options].sort().join('|')}`)
             
-            const letterIndex = answerLetter.charCodeAt(0) - 65 
-            const correct_answer = options[letterIndex] || ''
+            const { data: existing } = await supabase
+              .from('questions')
+              .select('id')
+              .eq('explanation', qHash)
+              .maybeSingle()
 
-            if (question_text && options.length === 4 && correct_answer) {
-              const qHash = generateHash(`${question_text}|${[...options].sort().join('|')}`)
-              
-              const { data: existing } = await supabase
-                .from('questions')
-                .select('id')
-                .eq('explanation', qHash)
-                .maybeSingle()
-
-              if (existing) {
-                totalQuestionsSkipped++
-              } else {
-                parsedQuestions.push({ question_text, options, correct_answer, hint, qHash })
-              }
+            if (existing) {
+              totalQuestionsSkipped++
+            } else {
+              parsedQuestions.push({ question_text, options, correct_answer, hint, qHash })
             }
           }
-
-          if (parsedQuestions.length > 0) {
-            const autoTitle = `${finalUploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
-            
-            const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
-              title: autoTitle, 
-              category: finalUploadCategory,
-              difficulty: uploadDifficulty, 
-              age_category: uploadAgeCategory, 
-              status: 'published', 
-              time_limit_seconds: uploadTimer
-            }).select().single()
-
-            if (quizErr) throw quizErr
-
-            const questionsToInsert = parsedQuestions.map(q => ({
-              quiz_id: quizData.id,
-              question_text: q.question_text,
-              options: q.options,
-              correct_answer: q.correct_answer,
-              hint: q.hint,
-              points: 10,
-              explanation: q.qHash
-            }))
-
-            const { error: qErr } = await supabase.from('questions').insert(questionsToInsert)
-            if (qErr) throw qErr
-
-            totalQuestionsAdded += parsedQuestions.length
-            totalQuizzesAdded++
-          }
         }
 
-        if (totalQuizzesAdded === 0 && totalQuestionsSkipped === 0) {
-          throw new Error("Could not find any valid questions. Please check the format.")
-        }
+        if (parsedQuestions.length > 0) {
+          const autoTitle = `${finalUploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
+          
+          const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
+            title: autoTitle, 
+            category: finalUploadCategory,
+            difficulty: uploadDifficulty, 
+            age_category: uploadAgeCategory, 
+            status: 'published', 
+            time_limit_seconds: uploadTimer
+          }).select().single()
 
-        if (totalQuizzesAdded === 0 && totalQuestionsSkipped > 0) {
-          setUploadStatus({ type: 'error', msg: `All ${totalQuestionsSkipped} questions in this file are duplicates and were skipped!` })
-        } else {
-          setUploadStatus({ 
-            type: 'success', 
-            msg: `Imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} questions. ${totalQuestionsSkipped > 0 ? `(${totalQuestionsSkipped} duplicates skipped)` : ''}` 
-          })
+          if (quizErr) throw quizErr
+
+          const questionsToInsert = parsedQuestions.map(q => ({
+            quiz_id: quizData.id,
+            question_text: q.question_text,
+            options: q.options,
+            correct_answer: q.correct_answer,
+            hint: q.hint,
+            points: 10,
+            explanation: q.qHash
+          }))
+
+          const { error: qErr } = await supabase.from('questions').insert(questionsToInsert)
+          if (qErr) throw qErr
+
+          totalQuestionsAdded += parsedQuestions.length
+          totalQuizzesAdded++
         }
-        
-        setSelectedFile(null)
-        setUploadCategory('')
-        if (fileInputRef.current) fileInputRef.current.value = ''
-        
-        fetchQuizzes()
-      } catch (err: any) {
-        setUploadStatus({ type: 'error', msg: err.message || 'Failed to parse document.' })
-      } finally {
-        setUploading(false)
       }
+
+      if (totalQuizzesAdded === 0 && totalQuestionsSkipped === 0) {
+        throw new Error("Could not find any valid questions. Please check the format.")
+      }
+
+      if (totalQuizzesAdded === 0 && totalQuestionsSkipped > 0) {
+        setUploadStatus({ type: 'error', msg: `All ${totalQuestionsSkipped} questions in this file are duplicates and were skipped!` })
+      } else {
+        setUploadStatus({ 
+          type: 'success', 
+          msg: `Imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} questions. ${totalQuestionsSkipped > 0 ? `(${totalQuestionsSkipped} duplicates skipped)` : ''}` 
+        })
+      }
+      
+      setSelectedFile(null)
+      setPastedText('')
+      setUploadCategory('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      
+      fetchQuizzes()
+    } catch (err: any) {
+      setUploadStatus({ type: 'error', msg: err.message || 'Failed to parse document.' })
+    } finally {
+      setUploading(false)
     }
-    reader.readAsText(selectedFile)
+  }
+
+  const handleProcessUpload = () => {
+    if (uploadMode === 'file') {
+      if (!selectedFile) return
+      setUploading(true)
+      setUploadStatus(null)
+      
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const text = event.target?.result as string
+        await processTextData(text)
+      }
+      reader.readAsText(selectedFile)
+    } else {
+      if (!pastedText.trim()) return
+      setUploading(true)
+      setUploadStatus(null)
+      processTextData(pastedText)
+    }
   }
 
   const handleDeleteQuiz = async (id: string) => {
@@ -282,7 +295,6 @@ export default function AdminQuizzes() {
     fetchQuizzes()
   }
 
-  // Filtered Quizzes Logic
   const filteredQuizzes = quizzes.filter(q => 
     ageFilter === 'all' ? true : q.age_category === ageFilter
   )
@@ -290,10 +302,8 @@ export default function AdminQuizzes() {
   return (
     <div className="relative z-10 max-w-6xl mx-auto sm:p-4 md:p-0 admin-page-enter">
       
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-8">
         <div>
-          {/* ✅ REMOVED: Back button is gone */}
           <h1 className="text-2xl sm:text-3xl font-black text-white">Quiz Manager</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">Create new quizzes, upload from documents, or manage existing content.</p>
         </div>
@@ -342,7 +352,7 @@ export default function AdminQuizzes() {
           </div>
           <div>
             <h3 className={`font-bold text-sm sm:text-lg ${activeTab === 'upload' ? 'text-[#ff00a0]' : 'text-white'}`}>Bulk Upload</h3>
-            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">Import multiple quizzes from a text file.</p>
+            <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1 hidden sm:block">Import multiple quizzes from a text file or paste text.</p>
           </div>
         </button>
       </div>
@@ -351,7 +361,6 @@ export default function AdminQuizzes() {
       {activeTab === 'list' && (
         <div className="bg-transparent sm:bg-[#0f1014] sm:border sm:border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
           
-          {/* AGE FILTER TABS */}
           <div className="p-4 border-b border-white/10 bg-black/20 flex flex-wrap gap-2">
             {['all', 'kids', 'teens', 'adults'].map((tier) => (
               <button
@@ -387,7 +396,6 @@ export default function AdminQuizzes() {
             </div>
           ) : (
             <>
-              {/* ✅ DESKTOP TABLE */}
               <div className="hidden sm:block overflow-x-auto admin-custom-scrollbar">
                 <table className="w-full text-left border-collapse min-w-[600px]">
                   <thead className="bg-black/40 border-b border-white/10 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
@@ -451,7 +459,6 @@ export default function AdminQuizzes() {
                 </table>
               </div>
 
-              {/* ✅ MOBILE CARD LIST */}
               <div className="sm:hidden flex flex-col gap-3 p-3">
                 {filteredQuizzes.map(q => (
                   <div key={q.id} className="bg-[#0f1014] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
@@ -579,7 +586,8 @@ export default function AdminQuizzes() {
             </div>
           </div>
 
-          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200">
+          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:
+          scale-[1.01] transform duration-200">
             Publish Quiz
           </button>
         </form>
@@ -634,26 +642,58 @@ export default function AdminQuizzes() {
                 </div>
               </div>
 
-              <input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="text-upload" />
-              
-              <label 
-                htmlFor="text-upload" 
-                className={`cursor-pointer flex flex-col items-center justify-center w-full py-8 sm:py-10 px-4 border-2 border-dashed rounded-xl sm:rounded-3xl transition-all ${
-                  selectedFile ? 'border-green-500/50 bg-green-500/5 text-green-400' : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
-                }`}
-              >
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/50 flex items-center justify-center mb-2 sm:mb-3">
-                  {selectedFile ? <CheckCircleIcon size={24} className="sm:w-7 sm:h-7" /> : <UploadSimpleIcon size={24} className="sm:w-7 sm:h-7" />}
-                </div>
-                <h3 className="font-bold text-sm sm:text-base mb-1 text-center">
-                  {selectedFile ? selectedFile.name : 'Click to select .txt file'}
-                </h3>
-                <p className="text-[10px] sm:text-xs text-gray-400">
-                  {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Multiple quizzes are supported.'}
-                </p>
-              </label>
+              {/* 🔧 NEW: Toggle for File Upload vs Paste Text */}
+              <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mb-4">
+                <button 
+                  onClick={() => setUploadMode('file')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${uploadMode === 'file' ? 'bg-[#ff00a0] text-black' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Upload File
+                </button>
+                <button 
+                  onClick={() => setUploadMode('paste')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${uploadMode === 'paste' ? 'bg-[#ff00a0] text-black' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Paste Text
+                </button>
+              </div>
 
-              {selectedFile && (
+              {uploadMode === 'file' ? (
+                <>
+                  <input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileChange} className="hidden" id="text-upload" />
+                  <label 
+                    htmlFor="text-upload" 
+                    className={`cursor-pointer flex flex-col items-center justify-center w-full py-8 sm:py-10 px-4 border-2 border-dashed rounded-xl sm:rounded-3xl transition-all ${
+                      selectedFile ? 'border-green-500/50 bg-green-500/5 text-green-400' : 'border-[#ff00a0]/30 bg-[#ff00a0]/5 hover:bg-[#ff00a0]/10 hover:border-[#ff00a0]/60 text-[#ff00a0]'
+                    }`}
+                  >
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/50 flex items-center justify-center mb-2 sm:mb-3">
+                      {selectedFile ? <CheckCircleIcon size={24} className="sm:w-7 sm:h-7" /> : <UploadSimpleIcon size={24} className="sm:w-7 sm:h-7" />}
+                    </div>
+                    <h3 className="font-bold text-sm sm:text-base mb-1 text-center">
+                      {selectedFile ? selectedFile.name : 'Click to select .txt file'}
+                    </h3>
+                    <p className="text-[10px] sm:text-xs text-gray-400">
+                      {selectedFile ? `${(selectedFile.size / 1024).toFixed(2)} KB` : 'Multiple quizzes are supported.'}
+                    </p>
+                  </label>
+                </>
+              ) : (
+                <div className="relative">
+                  <textarea
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                    placeholder="Paste your quiz text here (same format as below)..."
+                    className="w-full h-[150px] bg-black/50 border-2 border-[#ff00a0]/30 focus:border-[#ff00a0] rounded-xl p-4 text-white text-xs font-mono outline-none transition-colors resize-none admin-custom-scrollbar"
+                  />
+                  <div className="absolute bottom-3 right-3 text-[10px] text-gray-500 font-bold bg-black/60 px-2 py-1 rounded-md">
+                    {pastedText.length} chars
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Button */}
+              {(selectedFile || pastedText.trim()) && (
                 <button 
                   onClick={handleProcessUpload}
                   disabled={uploading}
