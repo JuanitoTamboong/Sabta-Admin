@@ -51,8 +51,11 @@ export default function AdminLayout() {
 
   // Fetch notifications across the whole layout
   useEffect(() => {
+    if (loading) return
+
     const fetchNotifications = async () => {
-      const today = new Date().toISOString().split('T')[0]
+      // 🔧 FIX: Use Manila timezone for "Today" calculation
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) // returns YYYY-MM-DD
       
       const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }).limit(5)
       
@@ -65,14 +68,16 @@ export default function AdminLayout() {
       let newTodayCount = 0
       
       usersData?.forEach(u => {
-        const isToday = u.created_at.startsWith(today)
+        // 🔧 FIX: Convert UTC to Manila Date string to check if it's today
+        const manilaDate = new Date(u.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+        const isToday = manilaDate === todayStr
         if (isToday) newTodayCount++
 
         newNotifs.push({
           id: `signup-${u.id}`,
           title: 'New Player Joined',
           message: `${u.display_name || 'A new user'} has created an account.`,
-          date: new Date(u.created_at),
+          date: new Date(u.created_at), // Keep as Date object for rendering
           icon: UsersIcon,
           color: '#00f0ff',
           link: '/admin/users'
@@ -80,7 +85,8 @@ export default function AdminLayout() {
       })
 
       attempts?.forEach((a: any) => {
-        const isToday = a.created_at.startsWith(today)
+        const manilaDate = new Date(a.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' })
+        const isToday = manilaDate === todayStr
         if (isToday) newTodayCount++
 
         const totalQuestions = (a.correct_answers || 0) + (a.incorrect_answers || 0) + (a.unanswered_questions || 0);
@@ -104,7 +110,22 @@ export default function AdminLayout() {
       setUnreadCount(newTodayCount)
     }
 
-    if (!loading) fetchNotifications()
+    fetchNotifications()
+
+    // 🔧 NEW: Real-time listener for new notifications
+    const channel = supabase
+      .channel('admin_notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_attempts' }, () => {
+        fetchNotifications()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
+        fetchNotifications()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [loading])
 
   // Close dropdown on click outside
@@ -259,8 +280,16 @@ export default function AdminLayout() {
                     <div>
                       <p className="text-xs font-bold text-white leading-tight">{n.title}</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">{n.message}</p>
+                      
+                      {/* 🔧 FIX: Display time in Asia/Manila */}
                       <p className="text-[9px] text-gray-600 mt-1 font-mono">
-                        {n.date.toLocaleDateString()} at {n.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {n.date.toLocaleDateString('en-US', { 
+                          timeZone: 'Asia/Manila',
+                          month: 'numeric', day: 'numeric', year: 'numeric'
+                        })} at {n.date.toLocaleTimeString('en-US', { 
+                          timeZone: 'Asia/Manila',
+                          hour: '2-digit', minute: '2-digit' 
+                        })}
                       </p>
                     </div>
                   </div>
@@ -277,7 +306,7 @@ export default function AdminLayout() {
         document.body
       )}
 
-      {/* MOBILE BOTTOM NAVIGATION BAR (Updated for 6 items) */}
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-1 pb-safe">
         {NAV_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
