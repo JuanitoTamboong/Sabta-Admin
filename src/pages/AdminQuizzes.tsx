@@ -6,7 +6,8 @@ import {
   PlusIcon, TrashIcon, UploadSimpleIcon, 
   FileTextIcon, CheckCircleIcon, XCircleIcon,
   GameControllerIcon, ClockIcon, ListDashesIcon, SparkleIcon,
-  EyeIcon, XIcon 
+  EyeIcon, XIcon,
+  BabyIcon, UserIcon, UsersThreeIcon
 } from '@phosphor-icons/react'
 
 export default function AdminQuizzes() {
@@ -39,7 +40,7 @@ export default function AdminQuizzes() {
   const [uploading, setUploading] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null)
   
-  // 🔧 File vs Paste State
+  // File vs Paste State
   const [uploadMode, setUploadMode] = useState<'file' | 'paste'>('file')
   const [pastedText, setPastedText] = useState('')
 
@@ -60,7 +61,7 @@ export default function AdminQuizzes() {
 
   useEffect(() => { fetchQuizzes() }, [])
 
-  // ✅ Auto-dismiss the success message after 5 seconds
+  // Auto-dismiss the success message after 5 seconds
   useEffect(() => {
     if (uploadStatus?.type === 'success') {
       const timer = setTimeout(() => {
@@ -299,6 +300,13 @@ export default function AdminQuizzes() {
     ageFilter === 'all' ? true : q.age_category === ageFilter
   )
 
+  const quizCounts = quizzes.reduce((acc, q) => {
+    if (q.age_category === 'kids') acc.kids++
+    else if (q.age_category === 'teens') acc.teens++
+    else if (q.age_category === 'adults') acc.adults++
+    return acc
+  }, { kids: 0, teens: 0, adults: 0 })
+
   return (
     <div className="relative z-10 max-w-6xl mx-auto sm:p-4 md:p-0 admin-page-enter">
       
@@ -361,6 +369,34 @@ export default function AdminQuizzes() {
       {activeTab === 'list' && (
         <div className="bg-transparent sm:bg-[#0f1014] sm:border sm:border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl animate-fade-in">
           
+          {/* QUIZ COUNTS STATS */}
+          <div className="grid grid-cols-3 divide-x divide-white/10 border-b border-white/10 bg-black/20">
+            <div className="p-4 flex flex-col items-center justify-center text-center hover:bg-white/5 transition">
+              <div className="flex items-center gap-1.5 text-green-400 mb-1">
+                <BabyIcon size={16} weight="fill" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Kids</span>
+              </div>
+              <p className="text-2xl font-black text-white">{quizCounts.kids}</p>
+            </div>
+            
+            <div className="p-4 flex flex-col items-center justify-center text-center hover:bg-white/5 transition">
+              <div className="flex items-center gap-1.5 text-yellow-400 mb-1">
+                <UserIcon size={16} weight="fill" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Teens</span>
+              </div>
+              <p className="text-2xl font-black text-white">{quizCounts.teens}</p>
+            </div>
+
+            <div className="p-4 flex flex-col items-center justify-center text-center hover:bg-white/5 transition">
+              <div className="flex items-center gap-1.5 text-[#00f0ff] mb-1">
+                <UsersThreeIcon size={16} weight="fill" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Adults</span>
+              </div>
+              <p className="text-2xl font-black text-white">{quizCounts.adults}</p>
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
           <div className="p-4 border-b border-white/10 bg-black/20 flex flex-wrap gap-2">
             {['all', 'kids', 'teens', 'adults'].map((tier) => (
               <button
@@ -568,7 +604,7 @@ export default function AdminQuizzes() {
                 <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">C.</span>
                 <input required placeholder="Option C" value={optC} onChange={e => setOptC(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
-              <div className="relative">
+                           <div className="relative">
                 <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">D.</span>
                 <input required placeholder="Option D" value={optD} onChange={e => setOptD(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
               </div>
@@ -586,8 +622,7 @@ export default function AdminQuizzes() {
             </div>
           </div>
 
-          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:
-          scale-[1.01] transform duration-200">
+          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200">
             Publish Quiz
           </button>
         </form>
@@ -642,7 +677,7 @@ export default function AdminQuizzes() {
                 </div>
               </div>
 
-              {/* 🔧 NEW: Toggle for File Upload vs Paste Text */}
+              {/* Toggle for File Upload vs Paste Text */}
               <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 mb-4">
                 <button 
                   onClick={() => setUploadMode('file')}
