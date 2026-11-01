@@ -12,6 +12,7 @@ import AdminLayout from './pages/AdminLayout'
 import AdminPlayers from './pages/AdminPlayers'
 import AdminCosmetics from './pages/AdminCosmetics'
 import AdminBadges from './pages/AdminBadges' // 🔧 Added Import
+import AdminAnnouncements from './pages/AdminAnnouncements'
 
 export default function AdminApp() {
   const [session, setSession] = useState<any>(null)
@@ -62,6 +63,7 @@ export default function AdminApp() {
         <Route path="users" element={<AdminPlayers />} />
         <Route path="cosmetics" element={<AdminCosmetics />} />
         <Route path="badges" element={<AdminBadges />} /> {/* 🔧 Added Route */}
+        <Route path="announcements" element={<AdminAnnouncements />} />
       </Route>
       
       {/* 3. Fallback */}

@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase'
 import {
   SquaresFourIcon, BookOpenIcon, UsersIcon, ChartLineUpIcon,
   GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon,
-  CheckCircleIcon, XIcon, MedalIcon
+  CheckCircleIcon, XIcon, MedalIcon, MegaphoneIcon
 } from '@phosphor-icons/react'
 import sabtaLogo from '../assets/icons/sabta-logo.png'
 import '../css/AdminLayout.css'
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/admin/analytics', label: 'Analytics', icon: ChartLineUpIcon },
   { path: '/admin/cosmetics', label: 'Cosmetics', icon: GiftIcon },
   { path: '/admin/badges', label: 'Badges', icon: MedalIcon },
+  { path: '/admin/announcements', label: 'Announcements', icon: MegaphoneIcon },
 ]
 
 export default function AdminLayout() {

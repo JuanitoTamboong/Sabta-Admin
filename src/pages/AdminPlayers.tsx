@@ -13,25 +13,63 @@ export default function AdminPlayers() {
   const [players, setPlayers] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTier, setFilterTier] = useState('all')
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [newPlayerNotice, setNewPlayerNotice] = useState('')
+  const [loadError, setLoadError] = useState('')
   
   // Delete State
   const [playerToDelete, setPlayerToDelete] = useState<any>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const fetchPlayers = async () => {
-    setLoading(true)
-    const { data } = await supabase
+  const fetchPlayers = async (showLoader = false) => {
+    if (showLoader) setLoading(true)
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('role', 'player') // ✅ FIX: Only fetch actual players, hiding admins
       .order('created_at', { ascending: false })
 
-    if (data) setPlayers(data)
+    if (error) {
+      setLoadError(`Failed to load players: ${error.message}`)
+    } else {
+      setPlayers(data || [])
+      setLoadError('')
+    }
     setLoading(false)
   }
 
   useEffect(() => {
-    fetchPlayers()
+    void fetchPlayers(true)
+
+    const channel = supabase
+      .channel('admin-player-registrations')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'profiles',
+        filter: 'role=eq.player'
+      }, payload => {
+        const newPlayer = payload.new as { display_name?: string; role?: string }
+        if (newPlayer.role === 'player') {
+          setNewPlayerNotice(`${newPlayer.display_name || 'A new player'} just registered.`)
+          void fetchPlayers()
+        }
+      })
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected')
+          void fetchPlayers()
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setRealtimeStatus('error')
+          setLoadError(`Live registration updates are unavailable (${status}).`)
+        } else {
+          setRealtimeStatus('connecting')
+        }
+      })
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
   }, [])
 
   const handleDeletePlayer = async () => {
@@ -71,6 +109,14 @@ export default function AdminPlayers() {
         <div>
           <h1 className="text-lg sm:text-3xl font-black text-white">Manage Players</h1>
           <p className="text-gray-400 text-[10px] sm:text-sm mt-0.5 sm:mt-1">View all registered players, their balances, and account details.</p>
+          <span className={`inline-flex items-center gap-1.5 mt-2 text-[10px] font-bold uppercase tracking-wider ${
+            realtimeStatus === 'connected' ? 'text-green-400' : realtimeStatus === 'error' ? 'text-red-400' : 'text-yellow-400'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              realtimeStatus === 'connected' ? 'bg-green-400' : realtimeStatus === 'error' ? 'bg-red-400' : 'bg-yellow-400 animate-pulse'
+            }`} />
+            {realtimeStatus === 'connected' ? 'Live registration updates' : realtimeStatus === 'error' ? 'Live updates unavailable' : 'Connecting to live updates'}
+          </span>
         </div>
         
         {/* Total Players Badge */}
@@ -82,6 +128,21 @@ export default function AdminPlayers() {
           </div>
         </div>
       </div>
+
+      {newPlayerNotice && (
+        <div className="max-w-7xl mx-auto mb-4 rounded-xl border border-[#00f0ff]/30 bg-[#00f0ff]/10 px-4 py-3 flex items-center justify-between gap-3 text-sm text-[#00f0ff]" role="status">
+          <span>{newPlayerNotice}</span>
+          <button type="button" onClick={() => setNewPlayerNotice('')} aria-label="Dismiss new player notice">
+            <XIcon size={16} />
+          </button>
+        </div>
+      )}
+
+      {loadError && (
+        <div className="max-w-7xl mx-auto mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300" role="alert">
+          {loadError}
+        </div>
+      )}
 
       {/* FILTERS */}
       <div className="max-w-7xl mx-auto mb-4 sm:mb-8 flex flex-col md:flex-row gap-2 sm:gap-4">
