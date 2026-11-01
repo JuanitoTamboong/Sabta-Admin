@@ -14,6 +14,8 @@ export default function AdminQuizzes() {
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'upload'>('list')
+  const [selectedQuizIds, setSelectedQuizIds] = useState<Set<string>>(new Set())
+  const [deletingQuizzes, setDeletingQuizzes] = useState(false)
   
   // Age Filter State
   const [ageFilter, setAgeFilter] = useState<'all' | 'kids' | 'teens' | 'adults'>('all')
@@ -290,10 +292,64 @@ export default function AdminQuizzes() {
     }
   }
 
-  const handleDeleteQuiz = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this quiz? This action cannot be undone.")) return
-    await supabase.from('quizzes').delete().eq('id', id)
-    fetchQuizzes()
+  const handleDeleteQuizzes = async (ids: string[], confirmationMessage: string) => {
+    if (ids.length === 0 || !confirm(confirmationMessage)) return
+
+    setDeletingQuizzes(true)
+    try {
+      const { error: questionsError } = await supabase
+        .from('questions')
+        .delete()
+        .in('quiz_id', ids)
+      if (questionsError) throw questionsError
+
+      const { error: quizzesError } = await supabase
+        .from('quizzes')
+        .delete()
+        .in('id', ids)
+      if (quizzesError) throw quizzesError
+
+      setSelectedQuizIds(current => {
+        const remaining = new Set(current)
+        ids.forEach(id => remaining.delete(id))
+        return remaining
+      })
+      if (viewingQuiz && ids.includes(viewingQuiz.id)) setViewingQuiz(null)
+      await fetchQuizzes()
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : String(error)
+      alert(`Failed to delete quiz${ids.length === 1 ? '' : 'zes'}: ${message}`)
+    } finally {
+      setDeletingQuizzes(false)
+    }
+  }
+
+  const handleDeleteQuiz = (id: string) => {
+    handleDeleteQuizzes([id], "Are you sure you want to delete this quiz and its questions? This action cannot be undone.")
+  }
+
+  const toggleQuizSelection = (id: string) => {
+    setSelectedQuizIds(current => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleVisibleQuizSelection = () => {
+    const visibleIds = filteredQuizzes.map(quiz => quiz.id)
+    const allVisibleSelected = visibleIds.every(id => selectedQuizIds.has(id))
+    setSelectedQuizIds(current => {
+      const next = new Set(current)
+      visibleIds.forEach(id => {
+        if (allVisibleSelected) next.delete(id)
+        else next.add(id)
+      })
+      return next
+    })
   }
 
   const filteredQuizzes = quizzes.filter(q => 
@@ -413,6 +469,44 @@ export default function AdminQuizzes() {
             ))}
           </div>
 
+          <div className="p-4 border-b border-white/10 bg-black/10 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleVisibleQuizSelection}
+              disabled={filteredQuizzes.length === 0 || deletingQuizzes}
+              className="px-3 py-2 rounded-lg text-xs font-bold bg-white/5 text-gray-300 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {filteredQuizzes.length > 0 && filteredQuizzes.every(quiz => selectedQuizIds.has(quiz.id))
+                ? 'Deselect visible'
+                : 'Select visible'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteQuizzes(
+                Array.from(selectedQuizIds),
+                `Delete ${selectedQuizIds.size} selected quiz${selectedQuizIds.size === 1 ? '' : 'zes'} and their questions? This action cannot be undone.`
+              )}
+              disabled={selectedQuizIds.size === 0 || deletingQuizzes}
+              className="px-3 py-2 rounded-lg text-xs font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <TrashIcon size={14} weight="bold" />
+                Delete selected ({selectedQuizIds.size})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteQuizzes(
+                quizzes.map(quiz => quiz.id),
+                `Delete all ${quizzes.length} quizzes and their questions? This action cannot be undone.`
+              )}
+              disabled={quizzes.length === 0 || deletingQuizzes}
+              className="px-3 py-2 rounded-lg text-xs font-bold bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Delete all ({quizzes.length})
+            </button>
+          </div>
+
           {loading ? (
              <div className="py-20 text-center bg-[#0f1014] rounded-2xl">
                <p className="text-[#ccff00] font-mono animate-pulse tracking-widest text-sm">LOADING DATABASE...</p>
@@ -436,6 +530,9 @@ export default function AdminQuizzes() {
                 <table className="w-full text-left border-collapse min-w-[600px]">
                   <thead className="bg-black/40 border-b border-white/10 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
                     <tr>
+                      <th className="py-4 pl-6 pr-2">
+                        <span className="sr-only">Select quiz</span>
+                      </th>
                       <th className="py-4 px-6">Quiz Details</th>
                       <th className="py-4 px-4">Tier / Difficulty</th>
                       <th className="py-4 px-4 text-center">Questions</th>
@@ -445,6 +542,16 @@ export default function AdminQuizzes() {
                   <tbody className="divide-y divide-white/5">
                     {filteredQuizzes.map(q => (
                       <tr key={q.id} className="hover:bg-white/[0.02] transition group">
+                        <td className="py-4 pl-6 pr-2">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${q.title}`}
+                            checked={selectedQuizIds.has(q.id)}
+                            onChange={() => toggleQuizSelection(q.id)}
+                            disabled={deletingQuizzes}
+                            className="h-4 w-4 accent-[#ccff00]"
+                          />
+                        </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
@@ -484,7 +591,7 @@ export default function AdminQuizzes() {
                             <button onClick={() => handleViewQuiz(q)} className="p-2.5 text-[#00f0ff] bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 rounded-xl transition" title="View Quiz Questions">
                               <EyeIcon size={20} weight="bold" />
                             </button>
-                            <button onClick={() => handleDeleteQuiz(q.id)} className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition" title="Delete Quiz">
+                            <button onClick={() => handleDeleteQuiz(q.id)} disabled={deletingQuizzes} className="p-2.5 text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-xl transition disabled:opacity-40" title="Delete Quiz">
                               <TrashIcon size={20} weight="bold" />
                             </button>
                           </div>
@@ -499,6 +606,14 @@ export default function AdminQuizzes() {
                 {filteredQuizzes.map(q => (
                   <div key={q.id} className="bg-[#0f1014] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
                     <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${q.title}`}
+                        checked={selectedQuizIds.has(q.id)}
+                        onChange={() => toggleQuizSelection(q.id)}
+                        disabled={deletingQuizzes}
+                        className="mt-1 h-4 w-4 accent-[#ccff00]"
+                      />
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00f0ff]/20 to-blue-600/20 border border-[#00f0ff]/30 flex items-center justify-center shrink-0">
                         <GameControllerIcon weight="fill" className="text-[#00f0ff] w-5 h-5" />
                       </div>
@@ -533,7 +648,7 @@ export default function AdminQuizzes() {
                         <button onClick={() => handleViewQuiz(q)} className="p-2 text-[#00f0ff] bg-[#00f0ff]/10 rounded-lg">
                           <EyeIcon size={16} weight="bold" />
                         </button>
-                        <button onClick={() => handleDeleteQuiz(q.id)} className="p-2 text-red-400 bg-red-400/10 rounded-lg">
+                        <button onClick={() => handleDeleteQuiz(q.id)} disabled={deletingQuizzes} className="p-2 text-red-400 bg-red-400/10 rounded-lg disabled:opacity-40">
                           <TrashIcon size={16} weight="bold" />
                         </button>
                       </div>
