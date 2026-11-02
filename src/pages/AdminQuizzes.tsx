@@ -24,6 +24,76 @@ const createEmptyManualQuestion = (): ManualQuestionDraft => ({
   hint: ''
 })
 
+const splitQuestionCode = (text: string) => {
+  const codeStart = text.search(/\b(?:public\s+)?class\s+[A-Za-z_$][\w$]*/)
+  if (codeStart < 0) return { prompt: text, code: null }
+
+  const prompt = text.slice(0, codeStart).trim()
+  const source = text.slice(codeStart).replace(/^\s*(```[^\n]*|~~~[^\n]*)?\s*/, '').replace(/\s*(```|~~~)\s*$/, '')
+  const tokens = source.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_$][\w$]*|\d+(?:\.\d+)?|==|!=|<=|>=|&&|\|\||\+\+|--|->|[{}()[\];,.@=+\-*/<>!?:]|\S/g) ?? []
+  const lines: string[] = []
+  let line = ''
+  let indent = 0
+  let previousToken = ''
+
+  const flushLine = () => {
+    if (line.trim()) lines.push(`${'  '.repeat(Math.max(indent, 0))}${line.trim()}`)
+    line = ''
+  }
+  const append = (value: string) => { line += value }
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
+    const previousIsWord = /^[A-Za-z_$\d]/.test(previousToken)
+    const tokenIsWord = /^[A-Za-z_$\d]/.test(token)
+
+    if (token === '{') {
+      if (line && !line.endsWith(' ')) append(' ')
+      append('{')
+      flushLine()
+      indent++
+    } else if (token === '}') {
+      flushLine()
+      indent = Math.max(indent - 1, 0)
+      line = '}'
+      flushLine()
+    } else if (token === ';') {
+      append(';')
+      flushLine()
+    } else if (token === ',') {
+      append(', ')
+    } else if (token === '.') {
+      append('.')
+    } else if (token === '(') {
+      const needsSpace = ['if', 'for', 'while', 'switch', 'catch', 'synchronized'].includes(previousToken)
+      if (needsSpace && line && !line.endsWith(' ')) append(' ')
+      append('(')
+    } else if (token === ')') {
+      append(')')
+    } else if (token === '[') {
+      append('[')
+    } else if (token === ']') {
+      append(']')
+    } else if (token === '@') {
+      append(`@${tokens[index + 1] ?? ''}`)
+      index++
+      flushLine()
+    } else if (['=', '+', '-', '*', '/', '==', '!=', '<', '>', '<=', '>=', '&&', '||', '?', ':', '->'].includes(token)) {
+      if (line && !line.endsWith(' ')) append(' ')
+      append(token)
+      append(' ')
+    } else {
+      if (previousIsWord && tokenIsWord) append(' ')
+      append(token)
+    }
+
+    previousToken = token
+  }
+  flushLine()
+
+  return { prompt, code: lines.join('\n') }
+}
+
 export default function AdminQuizzes() {
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -223,39 +293,145 @@ export default function AdminQuizzes() {
 
   const processTextData = async (text: string) => {
     try {
-      const quizBlocks = text.split(/(?=^[ \t]*#{0,6}[ \t]*(?:Quiz|Pagsusulit)[ \t]+\d+[ \t]*:)/im).filter(block => block.trim().length > 0)
+      const cleanHeading = (line: string) => line
+        .trim()
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/^\*{1,2}/, '')
+        .replace(/\*{1,2}$/, '')
+        .trim()
+      const getQuizHeading = (lines: string[], index: number) => {
+        const line = cleanHeading(lines[index])
+        const inlineHeading = line.match(/^(?:Quiz|Pagsusulit)\s+(\d+)\s*:\s*(.*)$/i)
+        if (inlineHeading) return inlineHeading
+
+        if (/^(?:Quiz|Pagsusulit)$/i.test(line) && index + 1 < lines.length) {
+          return cleanHeading(lines[index + 1]).match(/^(\d+)\s*:\s*(.*)$/)
+        }
+
+        return null
+      }
+
+      const allLines = text.replace(/\r\n?/g, '\n').split('\n')
+      const quizBlocks: string[][] = []
+      let currentQuizLines: string[] = []
+      let insideCodeFence = false
+
+      for (let lineIndex = 0; lineIndex < allLines.length; lineIndex++) {
+        const line = allLines[lineIndex]
+        const startsCodeFence = /^\s*(```|~~~)/.test(line)
+        const isQuizHeading = !insideCodeFence && getQuizHeading(allLines, lineIndex)
+
+        if (isQuizHeading && currentQuizLines.length > 0) {
+          quizBlocks.push(currentQuizLines)
+          currentQuizLines = []
+        }
+
+        currentQuizLines.push(line)
+        if (startsCodeFence) insideCodeFence = !insideCodeFence
+      }
+      if (currentQuizLines.some(line => line.trim())) quizBlocks.push(currentQuizLines)
 
       let totalQuestionsAdded = 0
       let totalQuestionsSkipped = 0
       let totalQuizzesAdded = 0
       const uploadCategoryOverride = uploadCategory.trim()
 
-      for (let i = 0; i < quizBlocks.length; i++) {
-        const blockText = quizBlocks[i]
-        const quizHeading = blockText.match(/^[ \t]*#{0,6}[ \t]*(?:Quiz|Pagsusulit)[ \t]+(\d+)[ \t]*:[ \t]*(.*?)[ \t]*$/im)
+      for (const quizLines of quizBlocks) {
+        const quizHeading = quizLines
+          .map((_, index) => getQuizHeading(quizLines, index))
+          .find(Boolean)
         const quizNumber = quizHeading?.[1]
         const quizName = quizHeading?.[2]?.trim()
         const quizCategory = uploadCategoryOverride || quizName || 'General Knowledge'
-        const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
+        const questionBlocks: string[][] = []
+        let currentQuestionLines: string[] | null = null
+        let currentQuestionHasAnswer = false
+        insideCodeFence = false
+
+        for (const line of quizLines) {
+          const startsCodeFence = /^\s*(```|~~~)/.test(line)
+          const questionHeading = !insideCodeFence &&
+            cleanHeading(line).match(/^(?:(?:Question|Tanong)\s*|Q\s*)(\d+)\s*[.:]?\s*(.*)$/i)
+
+          if (questionHeading && (!currentQuestionLines || currentQuestionHasAnswer)) {
+            if (currentQuestionLines) questionBlocks.push(currentQuestionLines)
+            currentQuestionLines = [questionHeading[2]]
+            currentQuestionHasAnswer = false
+          } else if (currentQuestionLines) {
+            currentQuestionLines.push(line)
+            if (!insideCodeFence && /^\s*(?:Answer|Sagot)\s*:/i.test(line)) {
+              currentQuestionHasAnswer = true
+            }
+          }
+
+          if (startsCodeFence) insideCodeFence = !insideCodeFence
+        }
+        if (currentQuestionLines) questionBlocks.push(currentQuestionLines)
+
         const parsedQuestions = []
 
         for (const qBlock of questionBlocks) {
-          const lines = qBlock.split('\n').map(l => l.trim()).filter(l => l !== '')
-          if (lines.length === 0) continue
+          const questionTextLines: string[] = []
+          const optionLines: string[][] = [[], [], [], []]
+          const hintLines: string[] = []
+          let currentOptionIndex = -1
+          let readingHint = false
+          let answerLetter = 'A'
+          let inQuestionCodeFence = false
 
-          const question_text = lines[0].replace(/^(?:Question|Tanong) \d+:\s*/i, '').trim()
-          const options = lines.filter(l => /^[A-D]\./.test(l)).map(l => l.replace(/^[A-D]\.\s*/, '')) 
+          for (let lineIndex = 0; lineIndex < qBlock.length; lineIndex++) {
+            const line = qBlock[lineIndex]
+            const startsCodeFence = /^\s*(```|~~~)/.test(line)
 
-          const hintLine = lines.find(l => l.toLowerCase().startsWith('hint:'))
-          const hint = hintLine ? hintLine.substring(5).trim() : null
+            if (!inQuestionCodeFence) {
+              const optionMatch = line.match(/^\s*([A-D])(?:[.)]\s*(.*)|\s*)$/i)
+              const hintMatch = line.match(/^\s*Hint\s*:?\s*(.*)$/i)
+              const answerMatch = line.match(/^\s*(?:Answer|Sagot)\s*:\s*([A-D])(?:\s*[.)-]\s*.*)?\s*$/i)
 
-          const answerLine = lines.find(l => l.toLowerCase().startsWith('answer:') || l.toLowerCase().startsWith('sagot:'))
-          const answerLetter = answerLine ? answerLine.split(':')[1].trim().toUpperCase() : 'A'
+              if (optionMatch && (optionMatch[2] || qBlock[lineIndex + 1]?.trim())) {
+                currentOptionIndex = optionMatch[1].toUpperCase().charCodeAt(0) - 65
+                if (optionMatch[2]) {
+                  optionLines[currentOptionIndex].push(optionMatch[2])
+                } else {
+                  const nextLine = qBlock[lineIndex + 1]
+                  if (nextLine?.trim() && !/^\s*(?:[A-D](?:\.|\))?|Hint|Answer|Sagot)\b/i.test(nextLine)) {
+                    optionLines[currentOptionIndex].push(nextLine)
+                    lineIndex++
+                  }
+                }
+                readingHint = false
+              } else if (hintMatch) {
+                if (hintMatch[1]) hintLines.push(hintMatch[1])
+                readingHint = true
+                currentOptionIndex = -1
+              } else if (answerMatch) {
+                answerLetter = answerMatch[1].toUpperCase()
+                readingHint = false
+                currentOptionIndex = -1
+              } else if (readingHint) {
+                hintLines.push(line)
+              } else if (currentOptionIndex >= 0) {
+                optionLines[currentOptionIndex].push(line)
+              } else {
+                questionTextLines.push(line)
+              }
+            } else if (currentOptionIndex >= 0) {
+              optionLines[currentOptionIndex].push(line)
+            } else {
+              questionTextLines.push(line)
+            }
+
+            if (startsCodeFence) inQuestionCodeFence = !inQuestionCodeFence
+          }
+
+          const question_text = questionTextLines.join('\n').trim()
+          const options = optionLines.map(option => option.join('\n').trim())
+          const hint = hintLines.join('\n').trim() || null
           
           const letterIndex = answerLetter.charCodeAt(0) - 65 
           const correct_answer = options[letterIndex] || ''
 
-          if (question_text && options.length === 4 && correct_answer) {
+          if (question_text && options.every(Boolean) && correct_answer) {
             const qHash = generateHash(`${question_text}|${[...options].sort().join('|')}`)
             
             const { data: existing } = await supabase
@@ -956,7 +1132,7 @@ export default function AdminQuizzes() {
               <h3 className="text-xs sm:text-sm font-bold text-white mb-2 sm:mb-3 flex items-center gap-2">
                 <FileTextIcon className="text-gray-400" /> Format Guide
               </h3>
-              <p className="text-[10px] sm:text-xs text-gray-400 mb-3 sm:mb-4">Ensure your text file matches this exact structure. You can add multiple questions and multiple quizzes.</p>
+              <p className="text-[10px] sm:text-xs text-gray-400 mb-3 sm:mb-4">Supports multiline code, Q1 or Question 1 headings, and choices as either “A. text” or “A” followed by the answer on the next line.</p>
               
               <div className="bg-[#050505] border border-white/10 rounded-xl sm:rounded-2xl overflow-hidden flex-1 shadow-inner relative flex flex-col">
                 <div className="w-full h-7 sm:h-8 bg-black/40 border-b border-white/5 flex items-center px-3 sm:px-4 gap-1.5 shrink-0">
@@ -1057,45 +1233,59 @@ Sagot: B`}
                    <p className="text-gray-500 text-sm">No questions found for this quiz.</p>
                 </div>
               ) : (
-                quizQuestions.map((q, idx) => (
-                  <div key={q.id} className="bg-[#13151a] border border-white/5 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
-                    <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
-                      <span className="bg-white/5 text-gray-400 text-[10px] sm:text-xs font-black px-2 py-1 rounded-md sm:rounded-lg shrink-0">Q{idx + 1}</span>
-                      <p className="font-bold text-white text-xs sm:text-base leading-snug pt-0.5">{q.question_text}</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                      {q.options.map((opt: string, i: number) => {
-                        const isCorrect = opt === q.correct_answer
-                        return (
-                          <div key={i} className={`flex items-center gap-2 sm:gap-3 text-[11px] sm:text-sm p-2 sm:p-3 rounded-lg sm:rounded-xl border ${
-                            isCorrect 
-                              ? 'bg-green-500/10 border-green-500/30 text-green-400' 
-                              : 'bg-[#0a0a0c] border-white/5 text-gray-400'
-                          }`}>
-                            <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold shrink-0 text-[10px] sm:text-xs ${
-                              isCorrect ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'
-                            }`}>
-                              {String.fromCharCode(65 + i)}
-                            </span> 
-                            <span className={isCorrect ? 'font-bold' : ''}>{opt}</span>
-                            {isCorrect && <CheckCircleIcon className="ml-auto w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500 shrink-0" />}
-                          </div>
-                        )
-                      })}
-                    </div>
-                    
-                    {q.hint && (
-                      <div className="mt-2 sm:mt-3 bg-yellow-500/5 border border-yellow-500/10 p-2 sm:p-3 rounded-lg sm:rounded-xl flex items-start gap-2">
-                        <SparkleIcon weight="fill" className="text-yellow-500 w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 shrink-0" />
-                        <div>
-                          <span className="text-[9px] sm:text-[10px] text-yellow-500 font-bold uppercase tracking-wider block mb-0.5">Hint</span>
-                          <p className="text-[10px] sm:text-xs text-yellow-200/70">{q.hint}</p>
+                quizQuestions.map((q, idx) => {
+                  const { prompt, code } = splitQuestionCode(q.question_text)
+
+                  return (
+                    <div key={q.id} className="bg-[#13151a] border border-white/5 rounded-xl sm:rounded-2xl p-3 sm:p-5 shadow-sm">
+                      <div className="flex items-start gap-2 sm:gap-3 mb-3 sm:mb-4">
+                        <span className="bg-white/5 text-gray-400 text-[10px] sm:text-xs font-black px-2 py-1 rounded-md sm:rounded-lg shrink-0">Q{idx + 1}</span>
+                        <div className="min-w-0 flex-1 space-y-3">
+                          {prompt && <p className="font-bold text-white text-xs sm:text-base leading-relaxed pt-0.5 whitespace-pre-wrap">{prompt}</p>}
+                          {code && (
+                            <div className="overflow-hidden rounded-xl border border-cyan-400/15 bg-[#080b10]">
+                              <div className="border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-300/60">
+                                Code snippet
+                              </div>
+                              <pre className="overflow-x-auto p-3 sm:p-4 text-[11px] sm:text-xs leading-6 text-cyan-100/90 font-mono admin-custom-scrollbar"><code>{code}</code></pre>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                        {q.options.map((opt: string, i: number) => {
+                          const isCorrect = opt === q.correct_answer
+                          return (
+                            <div key={i} className={`flex items-center gap-2 sm:gap-3 text-[11px] sm:text-sm p-2 sm:p-3 rounded-lg sm:rounded-xl border ${
+                              isCorrect
+                                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                                : 'bg-[#0a0a0c] border-white/5 text-gray-400'
+                            }`}>
+                              <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center font-bold shrink-0 text-[10px] sm:text-xs ${
+                                isCorrect ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-gray-500'
+                              }`}>
+                                {String.fromCharCode(65 + i)}
+                              </span>
+                              <span className={`whitespace-pre-wrap break-words ${isCorrect ? 'font-bold' : ''}`}>{opt}</span>
+                              {isCorrect && <CheckCircleIcon className="ml-auto w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500 shrink-0" />}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {q.hint && (
+                        <div className="mt-2 sm:mt-3 bg-yellow-500/5 border border-yellow-500/10 p-2 sm:p-3 rounded-lg sm:rounded-xl flex items-start gap-2">
+                          <SparkleIcon weight="fill" className="text-yellow-500 w-3.5 h-3.5 sm:w-4 sm:h-4 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="text-[9px] sm:text-[10px] text-yellow-500 font-bold uppercase tracking-wider block mb-0.5">Hint</span>
+                            <p className="text-[10px] sm:text-xs text-yellow-200/70 whitespace-pre-wrap">{q.hint}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
               )}
             </div>
             
