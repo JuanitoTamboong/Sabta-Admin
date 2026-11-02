@@ -10,6 +10,20 @@ import {
   BabyIcon, UserIcon, UsersThreeIcon
 } from '@phosphor-icons/react'
 
+type ManualQuestionDraft = {
+  questionText: string
+  options: string[]
+  correctAnswer: string
+  hint: string
+}
+
+const createEmptyManualQuestion = (): ManualQuestionDraft => ({
+  questionText: '',
+  options: ['', '', '', ''],
+  correctAnswer: '',
+  hint: ''
+})
+
 export default function AdminQuizzes() {
   const [quizzes, setQuizzes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,16 +41,11 @@ export default function AdminQuizzes() {
 
   // Manual Creation State
   const [category, setCategory] = useState('')
+  const [manualQuizTitle, setManualQuizTitle] = useState('')
   const [difficulty, setDifficulty] = useState('normal')
   const [ageCategory, setAgeCategory] = useState('teens')
   const [manualTimer, setManualTimer] = useState(15)
-  const [qText, setQText] = useState('')
-  const [optA, setOptA] = useState('')
-  const [optB, setOptB] = useState('')
-  const [optC, setOptC] = useState('')
-  const [optD, setOptD] = useState('')
-  const [correct, setCorrect] = useState('')
-  const [manualHint, setManualHint] = useState('')
+  const [manualQuestions, setManualQuestions] = useState<ManualQuestionDraft[]>([createEmptyManualQuestion()])
 
   // Upload State
   const [uploading, setUploading] = useState(false)
@@ -91,6 +100,20 @@ export default function AdminQuizzes() {
     return 'hash_' + Math.abs(hash).toString(16)
   }
 
+  const updateManualQuestion = (index: number, updates: Partial<ManualQuestionDraft>) => {
+    setManualQuestions(current => current.map((question, questionIndex) =>
+      questionIndex === index ? { ...question, ...updates } : question
+    ))
+  }
+
+  const updateManualOption = (questionIndex: number, optionIndex: number, value: string) => {
+    setManualQuestions(current => current.map((question, index) =>
+      index === questionIndex
+        ? { ...question, options: question.options.map((option, i) => i === optionIndex ? value : option) }
+        : question
+    ))
+  }
+
   const handleViewQuiz = async (quiz: any) => {
     setViewingQuiz(quiz)
     setLoadingQuestions(true)
@@ -111,20 +134,46 @@ export default function AdminQuizzes() {
     setLoading(true)
     
     const finalCategory = category.trim() || 'General Knowledge'
-    const autoTitle = `${finalCategory} Quiz - ${new Date().toLocaleDateString()}`
-    const qHash = generateHash(`${qText}|${[optA, optB, optC, optD].sort().join('|')}`)
+    const autoTitle = `Quiz 1: ${manualQuizTitle.trim()}`
+    const questionsToPublish = manualQuestions.map(question => {
+      const questionText = question.questionText.trim()
+      const options = question.options.map(option => option.trim())
+      const correctAnswer = question.correctAnswer.trim()
+
+      return {
+        question_text: questionText,
+        options,
+        correct_answer: correctAnswer,
+        hint: question.hint.trim() || null,
+        qHash: generateHash(`${questionText}|${[...options].sort().join('|')}`)
+      }
+    })
 
     try {
-      const { data: existing } = await supabase
-        .from('questions')
-        .select('id')
-        .eq('explanation', qHash)
-        .maybeSingle()
+      if (questionsToPublish.some(question =>
+        !question.question_text ||
+        question.options.length !== 4 ||
+        question.options.some(option => !option)
+      )) {
+        throw new Error('Complete the question text and all four options for every question.')
+      }
 
-      if (existing) {
-        alert("Duplicate Detected! This exact question already exists in the database.")
-        setLoading(false)
-        return
+      if (questionsToPublish.some(question => !question.options.includes(question.correct_answer))) {
+        throw new Error('Each correct answer must exactly match one of its four options.')
+      }
+
+      const questionHashes = questionsToPublish.map(question => question.qHash)
+      if (new Set(questionHashes).size !== questionHashes.length) {
+        throw new Error('Duplicate questions detected in this quiz. Please remove or edit the duplicates.')
+      }
+
+      const { data: existingQuestions, error: existingQuestionsError } = await supabase
+        .from('questions')
+        .select('explanation')
+        .in('explanation', questionHashes)
+      if (existingQuestionsError) throw existingQuestionsError
+      if (existingQuestions?.length) {
+        throw new Error('One or more questions already exist in the database. Please remove or edit the duplicates.')
       }
 
       const { data: quizData, error: quizError } = await supabase.from('quizzes').insert({
@@ -137,24 +186,29 @@ export default function AdminQuizzes() {
       }).select().single()
       if (quizError) throw quizError
 
-      const { error: qError } = await supabase.from('questions').insert({
-        quiz_id: quizData.id, 
-        question_text: qText, 
-        options: [optA, optB, optC, optD], 
-        correct_answer: correct, 
-        hint: manualHint || null,
-        points: 10,
-        explanation: qHash 
-      })
+      const { error: qError } = await supabase.from('questions').insert(
+        questionsToPublish.map(question => ({
+          quiz_id: quizData.id,
+          question_text: question.question_text,
+          options: question.options,
+          correct_answer: question.correct_answer,
+          hint: question.hint,
+          points: 10,
+          explanation: question.qHash
+        }))
+      )
       if (qError) throw qError
 
-      setUploadStatus({ type: 'success', msg: "Quiz published successfully!" })
+      setUploadStatus({ type: 'success', msg: `Quiz published with ${questionsToPublish.length} questions!` })
       
       setActiveTab('list')
-      setQText(''); setOptA(''); setOptB(''); setOptC(''); setOptD(''); setCorrect(''); setManualHint(''); setCategory('')
-      fetchQuizzes()
+      setManualQuestions([createEmptyManualQuestion()])
+      setCategory('')
+      setManualQuizTitle('')
+      await fetchQuizzes()
     } catch (err: any) {
       alert("Error: " + err.message)
+    } finally {
       setLoading(false)
     }
   }
@@ -676,11 +730,16 @@ export default function AdminQuizzes() {
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-white">Create New Quiz</h2>
-              <p className="text-[10px] sm:text-xs text-gray-400">Manually add a single question to the database.</p>
+              <p className="text-[10px] sm:text-xs text-gray-400">Add as many questions as you need before publishing.</p>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div>
+              <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Quiz Header</label>
+              <input required placeholder="e.g. Introduction to Java" value={manualQuizTitle} onChange={e => setManualQuizTitle(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm" />
+              <p className="text-[10px] text-gray-500 mt-1.5">Published as Quiz 1: [header]</p>
+            </div>
             <div>
               <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Category</label>
               <input required placeholder="e.g. Pop Culture, Science..." value={category} onChange={e => setCategory(e.target.value)} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm" />
@@ -703,48 +762,65 @@ export default function AdminQuizzes() {
             </div>
           </div>
 
-          <div className="bg-black/30 p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl border border-white/5 mb-6 sm:mb-8">
-            <h3 className="text-xs sm:text-sm font-bold text-white mb-4 sm:mb-5 flex items-center gap-2">
-              <SparkleIcon className="text-[#ccff00]" /> Question Content
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+              <SparkleIcon className="text-[#ccff00]" /> Questions ({manualQuestions.length})
             </h3>
-            
-            <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Question Text</label>
-            <input required placeholder="e.g. What is the capital of France?" value={qText} onChange={e => setQText(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 sm:p-4 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ccff00] mb-4 sm:mb-6 text-sm sm:text-lg font-medium" />
-            
-            <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Options (4 Required)</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-              <div className="relative">
-                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">A.</span>
-                <input required placeholder="Option A" value={optA} onChange={e => setOptA(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">B.</span>
-                <input required placeholder="Option B" value={optB} onChange={e => setOptB(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">C.</span>
-                <input required placeholder="Option C" value={optC} onChange={e => setOptC(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
-              </div>
-                           <div className="relative">
-                <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">D.</span>
-                <input required placeholder="Option D" value={optD} onChange={e => setOptD(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div>
-                <label className="text-[10px] sm:text-xs text-yellow-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Hint (Optional)</label>
-                <input placeholder="A clue for the player..." value={manualHint} onChange={e => setManualHint(e.target.value)} className="w-full bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 p-3 sm:p-4 rounded-lg sm:rounded-xl outline-none focus:border-yellow-500/50 transition placeholder-yellow-500/30 text-sm" />
-              </div>
-              <div>
-                <label className="text-[10px] sm:text-xs text-green-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Correct Answer</label>
-                <input required placeholder="Must match an option exactly" value={correct} onChange={e => setCorrect(e.target.value)} className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-3 sm:p-4 rounded-lg sm:rounded-xl font-bold outline-none focus:border-green-500 transition placeholder-green-500/30 text-sm" />
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setManualQuestions(current => [...current, createEmptyManualQuestion()])}
+              className="inline-flex items-center gap-2 bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/20 px-3 py-2 rounded-lg font-bold text-xs sm:text-sm hover:bg-[#00f0ff]/20 transition"
+            >
+              <PlusIcon weight="bold" size={16} /> Add Question
+            </button>
           </div>
 
-          <button type="submit" className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200">
-            Publish Quiz
+          <div className="space-y-4 mb-6 sm:mb-8">
+            {manualQuestions.map((question, questionIndex) => (
+              <section key={questionIndex} className="bg-black/30 p-4 sm:p-6 md:p-8 rounded-xl sm:rounded-2xl border border-white/5">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h4 className="text-sm font-bold text-white">Question {questionIndex + 1}</h4>
+                  {manualQuestions.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setManualQuestions(current => current.filter((_, index) => index !== questionIndex))}
+                      className="inline-flex items-center gap-1.5 text-red-400 hover:text-red-300 text-xs font-bold"
+                      aria-label={`Remove question ${questionIndex + 1}`}
+                    >
+                      <TrashIcon size={16} /> Remove
+                    </button>
+                  )}
+                </div>
+
+                <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Question Text</label>
+                <input required placeholder="e.g. What is the capital of France?" value={question.questionText} onChange={e => updateManualQuestion(questionIndex, { questionText: e.target.value })} className="w-full bg-[#0f1014] border border-white/10 p-3 sm:p-4 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ccff00] mb-4 sm:mb-6 text-sm sm:text-lg font-medium" />
+
+                <label className="text-[10px] sm:text-xs text-gray-400 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Options (4 Required)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                  {question.options.map((option, optionIndex) => (
+                    <div key={optionIndex} className="relative">
+                      <span className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">{String.fromCharCode(65 + optionIndex)}.</span>
+                      <input required placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`} value={option} onChange={e => updateManualOption(questionIndex, optionIndex, e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-3 pl-8 sm:p-3.5 sm:pl-10 rounded-lg sm:rounded-xl text-white outline-none focus:border-white/30 text-sm" />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <label className="text-[10px] sm:text-xs text-yellow-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Hint (Optional)</label>
+                    <input placeholder="A clue for the player..." value={question.hint} onChange={e => updateManualQuestion(questionIndex, { hint: e.target.value })} className="w-full bg-yellow-500/5 border border-yellow-500/20 text-yellow-400 p-3 sm:p-4 rounded-lg sm:rounded-xl outline-none focus:border-yellow-500/50 transition placeholder-yellow-500/30 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] sm:text-xs text-green-500 font-bold mb-1.5 sm:mb-2 block uppercase tracking-wider">Correct Answer</label>
+                    <input required placeholder="Must match an option exactly" value={question.correctAnswer} onChange={e => updateManualQuestion(questionIndex, { correctAnswer: e.target.value })} className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-3 sm:p-4 rounded-lg sm:rounded-xl font-bold outline-none focus:border-green-500 transition placeholder-green-500/30 text-sm" />
+                  </div>
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <button type="submit" disabled={loading} className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
+            {loading ? 'Publishing...' : `Publish Quiz (${manualQuestions.length} ${manualQuestions.length === 1 ? 'Question' : 'Questions'})`}
           </button>
         </form>
       )}
