@@ -17,6 +17,110 @@ type ManualQuestionDraft = {
   hint: string
 }
 
+type QuizPublishMode = 'draft' | 'publish' | 'schedule'
+
+type QuizPublication = {
+  status: 'draft' | 'published'
+  scheduled_at: string | null
+}
+
+const getQuizPublication = (mode: QuizPublishMode, scheduledAt: string): QuizPublication => {
+  if (mode === 'draft') return { status: 'draft', scheduled_at: null }
+  if (mode === 'publish') return { status: 'published', scheduled_at: null }
+
+  const scheduledDate = new Date(scheduledAt)
+  if (!scheduledAt || Number.isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+    throw new Error("Choose a date and time later than now in your device's local time. The quiz was not changed.")
+  }
+
+  return { status: 'draft', scheduled_at: scheduledDate.toISOString() }
+}
+
+const getPublicationSummary = (publication: QuizPublication) => {
+  if (publication.scheduled_at) {
+    return `scheduled for ${new Date(publication.scheduled_at).toLocaleString()}`
+  }
+  return publication.status === 'draft' ? 'saved as a draft' : 'published'
+}
+
+const toLocalDateTimeInputValue = (value: string | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+const getNextLocalMinute = () => {
+  const date = new Date()
+  date.setSeconds(0, 0)
+  date.setMinutes(date.getMinutes() + 1)
+  return toLocalDateTimeInputValue(date.toISOString())
+}
+
+function QuizPublishingOptions({
+  mode,
+  scheduledAt,
+  onModeChange,
+  onScheduledAtChange,
+  accent
+}: {
+  mode: QuizPublishMode
+  scheduledAt: string
+  onModeChange: (mode: QuizPublishMode) => void
+  onScheduledAtChange: (value: string) => void
+  accent: 'cyan' | 'pink'
+}) {
+  const focusColor = accent === 'cyan' ? 'focus:border-[#00f0ff]' : 'focus:border-[#ff00a0]'
+
+  return (
+    <div className="mb-6 rounded-xl border border-white/10 bg-black/30 p-4">
+      <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+        When should this quiz be available?
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {([
+          ['publish', 'Publish immediately'],
+          ['draft', 'Save as draft'],
+          ['schedule', 'Schedule publishing']
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            onClick={() => onModeChange(value)}
+            className={`min-h-11 rounded-lg border px-3 py-2 text-left text-sm font-bold transition ${
+              mode === value
+                ? accent === 'cyan'
+                  ? 'border-[#00f0ff] bg-[#00f0ff]/10 text-[#00f0ff]'
+                  : 'border-[#ff00a0] bg-[#ff00a0]/10 text-[#ff00a0]'
+                : 'border-white/10 bg-[#0f1014] text-gray-300 hover:border-white/30 hover:text-white'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === 'schedule' && (
+        <div className="mt-4 rounded-lg border border-[#ff9500]/30 bg-[#ff9500]/5 p-3">
+          <label className="mb-2 block text-xs font-bold text-white">
+            Choose the publish date and time
+          </label>
+          <input
+            type="datetime-local"
+            required
+            min={getNextLocalMinute()}
+            value={scheduledAt}
+            onChange={event => onScheduledAtChange(event.target.value)}
+            className={`w-full min-h-12 rounded-lg border border-white/10 bg-[#0f1014] p-3 text-base text-white outline-none ${focusColor}`}
+          />
+          <p className="mt-2 text-xs leading-relaxed text-gray-400">Tap this field to pick a date and time. The quiz publishes automatically within about a minute after that time.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const createEmptyManualQuestion = (): ManualQuestionDraft => ({
   questionText: '',
   options: ['', '', '', ''],
@@ -116,6 +220,12 @@ export default function AdminQuizzes() {
   const [ageCategory, setAgeCategory] = useState('teens')
   const [manualTimer, setManualTimer] = useState(15)
   const [manualQuestions, setManualQuestions] = useState<ManualQuestionDraft[]>([createEmptyManualQuestion()])
+  const [manualPublishMode, setManualPublishMode] = useState<QuizPublishMode>('publish')
+  const [manualScheduledAt, setManualScheduledAt] = useState('')
+  const [publishingQuizId, setPublishingQuizId] = useState<string | null>(null)
+  const [editingPublication, setEditingPublication] = useState<any | null>(null)
+  const [editingPublishMode, setEditingPublishMode] = useState<QuizPublishMode>('draft')
+  const [editingScheduledAt, setEditingScheduledAt] = useState('')
 
   // Upload State
   const [uploading, setUploading] = useState(false)
@@ -133,6 +243,8 @@ export default function AdminQuizzes() {
   const [uploadDifficulty, setUploadDifficulty] = useState('normal')
   const [uploadAgeCategory, setUploadAgeCategory] = useState('teens')
   const [uploadTimer, setUploadTimer] = useState(15)
+  const [uploadPublishMode, setUploadPublishMode] = useState<QuizPublishMode>('publish')
+  const [uploadScheduledAt, setUploadScheduledAt] = useState('')
 
   const fetchQuizzes = async () => {
     const { data } = await supabase.from('quizzes').select('*, questions(count)').order('created_at', { ascending: false })
@@ -220,6 +332,8 @@ export default function AdminQuizzes() {
     })
 
     try {
+      const publication = getQuizPublication(manualPublishMode, manualScheduledAt)
+
       if (questionsToPublish.some(question =>
         !question.question_text ||
         question.options.length !== 4 ||
@@ -251,7 +365,7 @@ export default function AdminQuizzes() {
         category: finalCategory, 
         difficulty, 
         age_category: ageCategory, 
-        status: 'published', 
+        ...publication,
         time_limit_seconds: manualTimer 
       }).select().single()
       if (quizError) throw quizError
@@ -269,12 +383,17 @@ export default function AdminQuizzes() {
       )
       if (qError) throw qError
 
-      setUploadStatus({ type: 'success', msg: `Quiz published with ${questionsToPublish.length} questions!` })
+      setUploadStatus({
+        type: 'success',
+        msg: `Quiz ${getPublicationSummary(publication)} with ${questionsToPublish.length} questions.`
+      })
       
       setActiveTab('list')
       setManualQuestions([createEmptyManualQuestion()])
       setCategory('')
       setManualQuizTitle('')
+      setManualPublishMode('publish')
+      setManualScheduledAt('')
       await fetchQuizzes()
     } catch (err: any) {
       alert("Error: " + err.message)
@@ -293,6 +412,8 @@ export default function AdminQuizzes() {
 
   const processTextData = async (text: string) => {
     try {
+      const publication = getQuizPublication(uploadPublishMode, uploadScheduledAt)
+
       const cleanHeading = (line: string) => line
         .trim()
         .replace(/^#{1,6}\s*/, '')
@@ -458,7 +579,7 @@ export default function AdminQuizzes() {
             category: quizCategory,
             difficulty: uploadDifficulty, 
             age_category: uploadAgeCategory, 
-            status: 'published', 
+            ...publication,
             time_limit_seconds: uploadTimer
           }).select().single()
 
@@ -491,16 +612,18 @@ export default function AdminQuizzes() {
       } else {
         setUploadStatus({ 
           type: 'success', 
-          msg: `Imported ${totalQuizzesAdded} quiz(zes) with ${totalQuestionsAdded} questions. ${totalQuestionsSkipped > 0 ? `(${totalQuestionsSkipped} duplicates skipped)` : ''}` 
+          msg: `Imported ${totalQuizzesAdded} quiz(zes) ${getPublicationSummary(publication)} with ${totalQuestionsAdded} questions. ${totalQuestionsSkipped > 0 ? `(${totalQuestionsSkipped} duplicates skipped)` : ''}`
         })
       }
       
       setSelectedFile(null)
       setPastedText('')
       setUploadCategory('')
+      setUploadPublishMode('publish')
+      setUploadScheduledAt('')
       if (fileInputRef.current) fileInputRef.current.value = ''
       
-      fetchQuizzes()
+      await fetchQuizzes()
     } catch (err: any) {
       setUploadStatus({ type: 'error', msg: err.message || 'Failed to parse document.' })
     } finally {
@@ -564,6 +687,65 @@ export default function AdminQuizzes() {
 
   const handleDeleteQuiz = (id: string) => {
     handleDeleteQuizzes([id], "Are you sure you want to delete this quiz and its questions? This action cannot be undone.")
+  }
+
+  const handlePublishQuizNow = async (id: string) => {
+    setPublishingQuizId(id)
+    try {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .update({ status: 'published', scheduled_at: null })
+        .eq('id', id)
+        .select('id')
+        .maybeSingle()
+      if (error) throw error
+      if (!data) throw new Error('No quiz was updated. Refresh the list and check that your admin access is active.')
+
+      await fetchQuizzes()
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : String(error)
+      alert(`Failed to publish quiz: ${message}`)
+    } finally {
+      setPublishingQuizId(null)
+    }
+  }
+
+  const openPublicationEditor = (quiz: any) => {
+    setEditingPublication(quiz)
+    setEditingPublishMode(
+      quiz.status === 'published' ? 'publish' : quiz.scheduled_at ? 'schedule' : 'draft'
+    )
+    setEditingScheduledAt(toLocalDateTimeInputValue(quiz.scheduled_at))
+  }
+
+  const handleSavePublication = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!editingPublication) return
+
+    setPublishingQuizId(editingPublication.id)
+    try {
+      const publication = getQuizPublication(editingPublishMode, editingScheduledAt)
+      const { data, error } = await supabase
+        .from('quizzes')
+        .update(publication)
+        .eq('id', editingPublication.id)
+        .select('id')
+        .maybeSingle()
+      if (error) throw error
+      if (!data) throw new Error('No quiz was updated. Check that the scheduling SQL was applied and your admin access is active.')
+
+      setEditingPublication(null)
+      await fetchQuizzes()
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : String(error)
+      alert(`Failed to update quiz publishing: ${message}`)
+    } finally {
+      setPublishingQuizId(null)
+    }
   }
 
   const toggleQuizSelection = (id: string) => {
@@ -770,6 +952,7 @@ export default function AdminQuizzes() {
                         <span className="sr-only">Select quiz</span>
                       </th>
                       <th className="py-4 px-6">Quiz Details</th>
+                      <th className="py-4 px-4">Status</th>
                       <th className="py-4 px-4">Tier / Difficulty</th>
                       <th className="py-4 px-4 text-center">Questions</th>
                       <th className="py-4 px-6 text-right">Actions</th>
@@ -801,6 +984,22 @@ export default function AdminQuizzes() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex flex-col items-start gap-1">
+                            <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                              q.status === 'published'
+                                ? 'border-green-500/20 bg-green-500/10 text-green-400'
+                                : q.scheduled_at
+                                  ? 'border-[#ff9500]/20 bg-[#ff9500]/10 text-[#ff9500]'
+                                  : 'border-white/10 bg-white/5 text-gray-400'
+                            }`}>
+                              {q.status === 'published' ? 'Published' : q.scheduled_at ? 'Scheduled' : 'Draft'}
+                            </span>
+                            {q.scheduled_at && q.status !== 'published' && (
+                              <span className="text-[10px] text-gray-500">{new Date(q.scheduled_at).toLocaleString()}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex flex-col items-start gap-1">
                             <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                               q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
                               q.age_category === 'teens' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 
@@ -824,6 +1023,24 @@ export default function AdminQuizzes() {
                         </td>
                         <td className="py-4 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openPublicationEditor(q)}
+                              disabled={publishingQuizId !== null}
+                              className="rounded-xl bg-[#ff9500]/10 p-2.5 text-[#ff9500] transition hover:bg-[#ff9500]/20 disabled:opacity-40"
+                              title="Change publishing status"
+                            >
+                              <ClockIcon size={20} weight="bold" />
+                            </button>
+                            {q.status !== 'published' && (
+                              <button
+                                onClick={() => handlePublishQuizNow(q.id)}
+                                disabled={publishingQuizId !== null}
+                                className="rounded-xl bg-green-500/10 p-2.5 text-green-400 transition hover:bg-green-500/20 disabled:opacity-40"
+                                title="Publish Quiz Now"
+                              >
+                                <CheckCircleIcon size={20} weight="bold" />
+                              </button>
+                            )}
                             <button onClick={() => handleViewQuiz(q)} className="p-2.5 text-[#00f0ff] bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 rounded-xl transition" title="View Quiz Questions">
                               <EyeIcon size={20} weight="bold" />
                             </button>
@@ -856,10 +1073,24 @@ export default function AdminQuizzes() {
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-white text-sm line-clamp-2 leading-tight">{q.title}</p>
                         <p className="text-[10px] text-[#ff00a0] font-semibold mt-1">{q.category}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className={`rounded-md border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                            q.status === 'published'
+                              ? 'border-green-500/20 bg-green-500/10 text-green-400'
+                              : q.scheduled_at
+                                ? 'border-[#ff9500]/20 bg-[#ff9500]/10 text-[#ff9500]'
+                                : 'border-white/10 bg-white/5 text-gray-400'
+                          }`}>
+                            {q.status === 'published' ? 'Published' : q.scheduled_at ? 'Scheduled' : 'Draft'}
+                          </span>
+                          {q.scheduled_at && q.status !== 'published' && (
+                            <span className="text-[9px] text-gray-500">{new Date(q.scheduled_at).toLocaleString()}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                    <div className="mt-1 flex flex-col gap-3 border-t border-white/5 pt-3">
                       <div className="flex items-center gap-2">
                         <span className={`text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider border ${
                           q.age_category === 'kids' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 
@@ -881,6 +1112,24 @@ export default function AdminQuizzes() {
                       </div>
                       
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openPublicationEditor(q)}
+                          disabled={publishingQuizId !== null}
+                          className="rounded-lg bg-[#ff9500]/10 p-2 text-[#ff9500] disabled:opacity-40"
+                          title="Change publishing status"
+                        >
+                          <ClockIcon size={16} weight="bold" />
+                        </button>
+                        {q.status !== 'published' && (
+                          <button
+                            onClick={() => handlePublishQuizNow(q.id)}
+                            disabled={publishingQuizId !== null}
+                            className="rounded-lg bg-green-500/10 p-2 text-green-400 disabled:opacity-40"
+                            title="Publish Quiz Now"
+                          >
+                            <CheckCircleIcon size={16} weight="bold" />
+                          </button>
+                        )}
                         <button onClick={() => handleViewQuiz(q)} className="p-2 text-[#00f0ff] bg-[#00f0ff]/10 rounded-lg">
                           <EyeIcon size={16} weight="bold" />
                         </button>
@@ -937,6 +1186,14 @@ export default function AdminQuizzes() {
               <input type="number" min="5" max="120" value={manualTimer} onChange={e => setManualTimer(parseInt(e.target.value))} className="w-full bg-black/50 border border-white/10 p-3 sm:p-3.5 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#00f0ff] transition text-sm" />
             </div>
           </div>
+
+          <QuizPublishingOptions
+            mode={manualPublishMode}
+            scheduledAt={manualScheduledAt}
+            onModeChange={setManualPublishMode}
+            onScheduledAtChange={setManualScheduledAt}
+            accent="cyan"
+          />
 
           <div className="flex items-center justify-between gap-3 mb-4">
             <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
@@ -996,7 +1253,7 @@ export default function AdminQuizzes() {
           </div>
 
           <button type="submit" disabled={loading} className="bg-[#ccff00] text-black px-6 sm:px-8 py-3 sm:py-4 rounded-lg sm:rounded-xl font-black text-base sm:text-lg w-full hover:bg-white transition shadow-[0_0_30px_rgba(204,255,0,0.2)] hover:scale-[1.01] transform duration-200 disabled:opacity-60 disabled:cursor-not-allowed">
-            {loading ? 'Publishing...' : `Publish Quiz (${manualQuestions.length} ${manualQuestions.length === 1 ? 'Question' : 'Questions'})`}
+            {loading ? 'Saving...' : `${manualPublishMode === 'draft' ? 'Save Draft' : manualPublishMode === 'schedule' ? 'Schedule Quiz' : 'Publish Quiz'} (${manualQuestions.length} ${manualQuestions.length === 1 ? 'Question' : 'Questions'})`}
           </button>
         </form>
       )}
@@ -1024,6 +1281,13 @@ export default function AdminQuizzes() {
                   <ClockIcon className="text-[#ff00a0]" /> Quiz Settings
                 </h3>
                 <div className="space-y-3 sm:space-y-4">
+                  <QuizPublishingOptions
+                    mode={uploadPublishMode}
+                    scheduledAt={uploadScheduledAt}
+                    onModeChange={setUploadPublishMode}
+                    onScheduledAtChange={setUploadScheduledAt}
+                    accent="pink"
+                  />
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Category</label>
                     <input placeholder="Optional; defaults to the quiz heading" value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] transition text-sm" />
@@ -1290,6 +1554,42 @@ Sagot: B`}
             </div>
             
           </div>
+        </div>,
+        document.body
+      )}
+
+      {editingPublication && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+          <form
+            onSubmit={handleSavePublication}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#0f1014] p-5 shadow-2xl sm:p-7"
+          >
+            <h2 className="mb-1 text-lg font-bold text-white">Change quiz publishing</h2>
+            <p className="mb-5 text-sm text-gray-400">{editingPublication.title}</p>
+            <QuizPublishingOptions
+              mode={editingPublishMode}
+              scheduledAt={editingScheduledAt}
+              onModeChange={setEditingPublishMode}
+              onScheduledAtChange={setEditingScheduledAt}
+              accent="pink"
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingPublication(null)}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm font-bold text-gray-300 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={publishingQuizId !== null}
+                className="rounded-lg bg-[#ccff00] px-4 py-2 text-sm font-bold text-black hover:bg-white disabled:opacity-50"
+              >
+                {publishingQuizId === editingPublication.id ? 'Saving...' : 'Save status'}
+              </button>
+            </div>
+          </form>
         </div>,
         document.body
       )}
