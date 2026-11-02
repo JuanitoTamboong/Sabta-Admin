@@ -9,6 +9,8 @@ import {
 
 export default function AdminAnalytics() {
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
   const [stats, setStats] = useState({ 
     totalPlayers: 0, 
     totalQuizzes: 0, 
@@ -22,40 +24,94 @@ export default function AdminAnalytics() {
 
   useEffect(() => {
     const fetchStats = async () => {
-      // ✅ FIX: Fetch only players, exclude admins
-      const { data: profiles } = await supabase.from('profiles').select('age_category, coins').eq('role', 'player')
-      const { count: quizCount } = await supabase.from('quizzes').select('*', { count: 'exact', head: true })
-      const { data: attempts } = await supabase.from('quiz_attempts').select('accuracy')
+      setLoading(true)
+      setLoadError('')
 
-      if (profiles) {
-        const totalCoins = profiles.reduce((acc, p) => acc + (p.coins || 0), 0)
-        let avgAcc = 0
-        
-        if (attempts && attempts.length > 0) {
-          const sumAcc = attempts.reduce((acc, a) => acc + (a.accuracy || 0), 0)
-          avgAcc = Math.round(sumAcc / attempts.length)
+      try {
+        const pageSize = 1000
+        const [
+          { data: firstProfiles, count: profileCount, error: profilesError },
+          { count: quizCount, error: quizzesError },
+          { data: firstAttempts, count: attemptCount, error: attemptsError }
+        ] = await Promise.all([
+          supabase.from('profiles').select('age_category, coins', { count: 'exact' }).eq('role', 'player').range(0, pageSize - 1),
+          supabase.from('quizzes').select('id', { count: 'exact', head: true }),
+          supabase.from('quiz_attempts')
+            .select('correct_answers, incorrect_answers, unanswered_questions', { count: 'exact' })
+            .eq('status', 'completed')
+            .range(0, pageSize - 1)
+        ])
+
+        if (profilesError) throw new Error(`Unable to load players: ${profilesError.message}`)
+        if (quizzesError) throw new Error(`Unable to load quizzes: ${quizzesError.message}`)
+        if (attemptsError) throw new Error(`Unable to load quiz attempts: ${attemptsError.message}`)
+
+        const profiles = firstProfiles ?? []
+        const attempts = firstAttempts ?? []
+
+        for (let offset = pageSize; offset < (profileCount ?? 0); offset += pageSize) {
+          const { data, error } = await supabase.from('profiles')
+            .select('age_category, coins')
+            .eq('role', 'player')
+            .range(offset, offset + pageSize - 1)
+          if (error) throw new Error(`Unable to load players: ${error.message}`)
+          profiles.push(...(data ?? []))
         }
 
+        for (let offset = pageSize; offset < (attemptCount ?? 0); offset += pageSize) {
+          const { data, error } = await supabase.from('quiz_attempts')
+            .select('correct_answers, incorrect_answers, unanswered_questions')
+            .eq('status', 'completed')
+            .range(offset, offset + pageSize - 1)
+          if (error) throw new Error(`Unable to load quiz attempts: ${error.message}`)
+          attempts.push(...(data ?? []))
+        }
+
+        const totalCorrect = attempts.reduce((total, attempt) => total + (attempt.correct_answers ?? 0), 0)
+        const totalQuestions = attempts.reduce((total, attempt) =>
+          total + (attempt.correct_answers ?? 0) + (attempt.incorrect_answers ?? 0) + (attempt.unanswered_questions ?? 0), 0)
+
         setStats({
-          totalPlayers: profiles.length,
-          totalQuizzes: quizCount || 0,
-          totalAttempts: attempts?.length || 0,
-          kids: profiles.filter(p => p.age_category === 'kids').length,
-          teens: profiles.filter(p => p.age_category === 'teens').length,
-          adults: profiles.filter(p => p.age_category === 'adults').length,
-          totalCoins,
-          avgAccuracy: avgAcc
+          totalPlayers: profileCount ?? profiles.length,
+          totalQuizzes: quizCount ?? 0,
+          totalAttempts: attemptCount ?? attempts.length,
+          kids: profiles.filter(profile => profile.age_category === 'kids').length,
+          teens: profiles.filter(profile => profile.age_category === 'teens').length,
+          adults: profiles.filter(profile => profile.age_category === 'adults').length,
+          totalCoins: profiles.reduce((total, profile) => total + (profile.coins ?? 0), 0),
+          avgAccuracy: totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) : 0
         })
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : 'Unable to load analytics.')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     fetchStats()
-  }, [])
+  }, [retryCount])
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-[#ccff00]">
         <p className="font-mono text-sm animate-pulse tracking-widest">LOADING ANALYTICS...</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-7xl mx-auto sm:p-4 md:p-0 admin-page-enter">
+        <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+          <h1 className="text-xl font-bold text-white">Analytics could not be loaded</h1>
+          <p className="mt-2 text-sm">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setRetryCount(count => count + 1)}
+            className="mt-4 rounded-lg bg-white/10 px-4 py-2 text-sm font-bold text-white hover:bg-white/20"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
@@ -206,7 +262,7 @@ export default function AdminAnalytics() {
                 <p className="text-[9px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider">Accuracy</p>
               </div>
               <p className="text-xl sm:text-3xl font-black text-[#ccff00]">{stats.avgAccuracy}%</p>
-              <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5 sm:mt-1">Avg across all attempts</p>
+              <p className="text-[8px] sm:text-[10px] text-gray-500 mt-0.5 sm:mt-1">Correct answers across completed attempts</p>
             </div>
 
             <div className="bg-black/40 border border-white/5 p-3 sm:p-5 rounded-xl sm:rounded-2xl flex flex-col justify-center">
