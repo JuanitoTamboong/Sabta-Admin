@@ -169,15 +169,19 @@ export default function AdminQuizzes() {
 
   const processTextData = async (text: string) => {
     try {
-      const quizBlocks = text.split(/(?=(?:Quiz|Pagsusulit) \d+:)/i).filter(block => block.trim().length > 0)
+      const quizBlocks = text.split(/(?=^[ \t]*#{0,6}[ \t]*(?:Quiz|Pagsusulit)[ \t]+\d+[ \t]*:)/im).filter(block => block.trim().length > 0)
 
       let totalQuestionsAdded = 0
       let totalQuestionsSkipped = 0
       let totalQuizzesAdded = 0
-      const finalUploadCategory = uploadCategory.trim() || 'General Knowledge'
+      const uploadCategoryOverride = uploadCategory.trim()
 
       for (let i = 0; i < quizBlocks.length; i++) {
         const blockText = quizBlocks[i]
+        const quizHeading = blockText.match(/^[ \t]*#{0,6}[ \t]*(?:Quiz|Pagsusulit)[ \t]+(\d+)[ \t]*:[ \t]*(.*?)[ \t]*$/im)
+        const quizNumber = quizHeading?.[1]
+        const quizName = quizHeading?.[2]?.trim()
+        const quizCategory = uploadCategoryOverride || quizName || 'General Knowledge'
         const questionBlocks = blockText.split(/(?=(?:Question|Tanong) \d+:)/i).filter(b => b.trim() !== '')
         const parsedQuestions = []
 
@@ -215,11 +219,13 @@ export default function AdminQuizzes() {
         }
 
         if (parsedQuestions.length > 0) {
-          const autoTitle = `${finalUploadCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
+          const autoTitle = quizName
+            ? `Quiz ${quizNumber}: ${quizName}`
+            : `${quizCategory} Quiz ${totalQuizzesAdded + 1} - ${new Date().toLocaleDateString()}`
           
           const { data: quizData, error: quizErr } = await supabase.from('quizzes').insert({
             title: autoTitle, 
-            category: finalUploadCategory,
+            category: quizCategory,
             difficulty: uploadDifficulty, 
             age_category: uploadAgeCategory, 
             status: 'published', 
@@ -768,7 +774,7 @@ export default function AdminQuizzes() {
                 <div className="space-y-3 sm:space-y-4">
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1 block">Category</label>
-                    <input required placeholder="e.g. Geography, History..." value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] transition text-sm" />
+                    <input placeholder="Optional; defaults to the quiz heading" value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} className="w-full bg-[#0f1014] border border-white/10 p-2.5 sm:p-3 rounded-lg sm:rounded-xl text-white outline-none focus:border-[#ff00a0] transition text-sm" />
                   </div>
                   
                   <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -884,24 +890,25 @@ export default function AdminQuizzes() {
                   <span className="text-[9px] sm:text-[10px] text-gray-500 font-mono ml-1.5 sm:ml-2">example.txt</span>
                 </div>
                 <pre className="p-3 sm:p-5 text-[10px] sm:text-xs text-[#00f0ff] font-mono leading-relaxed overflow-x-auto flex-1">
-{`Quiz 1:
-Question 1: What is water?
-A. A solid mineral
-B. H2O
-C. A type of air
-D. A metal element
-Hint: Think about hydrogen and oxygen.
-Answer: B
-
-Question 2: What is the sun?
-A. A star
-B. A planet
-C. A moon
-D. A comet
-Hint: It shines very brightly.
+{`Quiz 1: Introduction to Java
+Question 1: What is Java?
+A. A programming language
+B. An operating system
+C. A web browser
+D. A database
+Hint: Developers use it to create software and applications.
 Answer: A
 
-Quiz 2:
+Quiz 2: Geography
+Question 1: What is the capital of France?
+A. Rome
+B. Madrid
+C. Paris
+D. Berlin
+Hint: The city is known as the City of Light.
+Answer: C
+
+Quiz 3: Basic Addition
 Question 1: 2 + 2 = ?
 A. 3
 B. 4
@@ -910,8 +917,7 @@ D. 6
 Hint: Basic addition.
 Answer: B
 
-(Pwede rin Tagalog)
-Pagsusulit 3:
+Pagsusulit 4: Paghinga
 Tanong 1: Ano ang ating ginagamit sa paghinga?
 A. Tubig
 B. Hangin
