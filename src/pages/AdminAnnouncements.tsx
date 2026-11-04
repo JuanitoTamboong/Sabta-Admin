@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { BellRingingIcon, MegaphoneIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react'
+
+const APK_BUCKET = 'announcement-apks'
 
 type Announcement = {
   id: string
   title: string
   message: string
+  apk_url: string | null
   severity: 'info' | 'warning' | 'urgent'
   is_active: boolean
   published_at: string | null
@@ -34,6 +37,18 @@ function toLocalDateTime(value: string | null) {
   return date.toISOString().slice(0, 16)
 }
 
+function getApkStoragePath(url: string) {
+  const marker = `/storage/v1/object/public/${APK_BUCKET}/`
+  const markerIndex = url.indexOf(marker)
+  if (markerIndex < 0) return null
+
+  try {
+    return decodeURIComponent(url.slice(markerIndex + marker.length).split('?')[0])
+  } catch {
+    return null
+  }
+}
+
 export default function AdminAnnouncements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [form, setForm] = useState<AnnouncementForm>(EMPTY_FORM)
@@ -42,11 +57,34 @@ export default function AdminAnnouncements() {
   const [saving, setSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [selectedApk, setSelectedApk] = useState<File | null>(null)
+  const [editingApkUrl, setEditingApkUrl] = useState<string | null>(null)
+  const [removeExistingApk, setRemoveExistingApk] = useState(false)
+  const apkInputRef = useRef<HTMLInputElement>(null)
+
+  const handleApkSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      setSelectedApk(null)
+      return
+    }
+
+    if (!file.name.toLowerCase().endsWith('.apk')) {
+      setSelectedApk(null)
+      setErrorMessage('Please select a valid Android APK file.')
+      event.target.value = ''
+      return
+    }
+
+    setSelectedApk(file)
+    setRemoveExistingApk(false)
+    setErrorMessage('')
+  }
 
   const fetchAnnouncements = async () => {
     const { data, error } = await supabase
       .from('announcements')
-      .select('id, title, message, severity, is_active, published_at, ends_at, created_at')
+      .select('id, title, message, apk_url, severity, is_active, published_at, ends_at, created_at')
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -83,6 +121,10 @@ export default function AdminAnnouncements() {
   const resetForm = () => {
     setForm(EMPTY_FORM)
     setEditingId(null)
+    setSelectedApk(null)
+    setEditingApkUrl(null)
+    setRemoveExistingApk(false)
+    if (apkInputRef.current) apkInputRef.current.value = ''
   }
 
   const handleEdit = (announcement: Announcement) => {
@@ -93,6 +135,10 @@ export default function AdminAnnouncements() {
       ends_at: toLocalDateTime(announcement.ends_at)
     })
     setEditingId(announcement.id)
+    setEditingApkUrl(announcement.apk_url)
+    setRemoveExistingApk(false)
+    setSelectedApk(null)
+    if (apkInputRef.current) apkInputRef.current.value = ''
     setErrorMessage('')
     setSuccessMessage('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -113,10 +159,30 @@ export default function AdminAnnouncements() {
       title: form.title.trim(),
       message: form.message.trim(),
       severity: form.severity,
-      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null
+      ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
+      apk_url: removeExistingApk ? null : editingApkUrl
     }
 
+    let uploadedApkPath: string | null = null
     try {
+      if (selectedApk) {
+        const safeFileName = selectedApk.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const filePath = `${crypto.randomUUID()}-${safeFileName}`
+        const { error: uploadError } = await supabase.storage
+          .from(APK_BUCKET)
+          .upload(filePath, selectedApk, {
+            contentType: 'application/vnd.android.package-archive',
+            upsert: false
+          })
+        if (uploadError) throw uploadError
+
+        uploadedApkPath = filePath
+        payload.apk_url = supabase.storage
+          .from(APK_BUCKET)
+          .getPublicUrl(filePath, { download: safeFileName })
+          .data.publicUrl
+      }
+
       if (editingId) {
         const { error } = await supabase.from('announcements').update(payload).eq('id', editingId)
         if (error) throw error
@@ -127,10 +193,27 @@ export default function AdminAnnouncements() {
         setSuccessMessage('Announcement published to players.')
       }
 
+      const previousApkUrl = editingApkUrl
+      const shouldRemovePreviousApk = previousApkUrl && (selectedApk || removeExistingApk)
       resetForm()
       await fetchAnnouncements()
+
+      if (shouldRemovePreviousApk) {
+        const oldApkPath = getApkStoragePath(previousApkUrl)
+        if (oldApkPath) {
+          const { error: cleanupError } = await supabase.storage.from(APK_BUCKET).remove([oldApkPath])
+          if (cleanupError) {
+            setErrorMessage(`Announcement saved, but the previous APK could not be removed: ${cleanupError.message}`)
+          }
+        }
+      }
     } catch (error) {
-      setErrorMessage(`Failed to save announcement: ${error instanceof Error ? error.message : String(error)}`)
+      let message = `Failed to save announcement: ${error instanceof Error ? error.message : String(error)}`
+      if (uploadedApkPath) {
+        const { error: cleanupError } = await supabase.storage.from(APK_BUCKET).remove([uploadedApkPath])
+        if (cleanupError) message += ` The uploaded APK could not be cleaned up: ${cleanupError.message}`
+      }
+      setErrorMessage(message)
     } finally {
       setSaving(false)
     }
@@ -158,6 +241,15 @@ export default function AdminAnnouncements() {
     if (error) {
       setErrorMessage(`Failed to delete announcement: ${error.message}`)
       return
+    }
+    if (announcement.apk_url) {
+      const apkPath = getApkStoragePath(announcement.apk_url)
+      if (apkPath) {
+        const { error: storageError } = await supabase.storage.from(APK_BUCKET).remove([apkPath])
+        if (storageError) {
+          setErrorMessage(`Announcement deleted, but its APK could not be removed: ${storageError.message}`)
+        }
+      }
     }
     if (editingId === announcement.id) resetForm()
     await fetchAnnouncements()
@@ -244,6 +336,39 @@ export default function AdminAnnouncements() {
           </div>
         </div>
 
+        <div>
+          <label htmlFor="announcement-apk" className="block text-xs text-gray-400 font-bold mb-2">Android APK (optional)</label>
+          <input
+            id="announcement-apk"
+            type="file"
+            accept=".apk,application/vnd.android.package-archive"
+            ref={apkInputRef}
+            onChange={handleApkSelection}
+            className="w-full bg-black/50 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-[#00f0ff] file:mr-3 file:rounded-lg file:border-0 file:bg-[#ccff00] file:px-3 file:py-2 file:text-xs file:font-bold file:text-black"
+          />
+          <p className="mt-2 text-[11px] text-gray-500">Accepted file type: .apk</p>
+          {selectedApk && <p className="mt-2 text-xs text-[#00f0ff]">Selected APK: {selectedApk.name}</p>}
+          {editingApkUrl && !removeExistingApk && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+              <a href={editingApkUrl} className="font-bold text-[#00f0ff] hover:underline">
+                Download current APK
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setRemoveExistingApk(true)
+                  setSelectedApk(null)
+                  if (apkInputRef.current) apkInputRef.current.value = ''
+                }}
+                className="text-red-400 hover:underline"
+              >
+                Remove APK
+              </button>
+            </div>
+          )}
+          {removeExistingApk && <p className="mt-2 text-xs text-yellow-400">The current APK will be removed when you save.</p>}
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <button
             type="submit"
@@ -292,6 +417,14 @@ export default function AdminAnnouncements() {
                     }`}>{announcement.severity}</span>
                   </div>
                   <p className="text-sm text-gray-300 whitespace-pre-wrap break-words">{announcement.message}</p>
+                  {announcement.apk_url && (
+                    <a
+                      href={announcement.apk_url}
+                      className="mt-3 inline-flex rounded-lg bg-[#ccff00] px-4 py-2 text-xs font-bold text-black hover:bg-white transition"
+                    >
+                      Download Android app (APK)
+                    </a>
+                  )}
                   {announcement.published_at && (
                     <p className="text-[10px] text-gray-500 mt-3">
                       Published {new Date(announcement.published_at).toLocaleString()}
