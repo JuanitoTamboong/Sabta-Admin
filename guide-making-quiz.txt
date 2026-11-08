@@ -1,0 +1,7 @@
+For future quizzes:
+- 60 questions, divided into 3 quizzes.
+- Completely new questions and topics.
+- Short, balanced A–D choices.
+- Randomized answer positions.
+- Correct answers shown as letters only.
+- No repeated questions from earlier sets.

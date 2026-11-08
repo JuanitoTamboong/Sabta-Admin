@@ -6,7 +6,8 @@ import { supabase } from '../lib/supabase'
 import {
   SquaresFourIcon, BookOpenIcon, UsersIcon, ChartLineUpIcon,
   GiftIcon, SignOutIcon, BellIcon, ShieldCheckIcon,
-  CheckCircleIcon, XIcon, MedalIcon, MegaphoneIcon
+  CheckCircleIcon, XIcon, MedalIcon, MegaphoneIcon,
+  FlagIcon  // ← NEW
 } from '@phosphor-icons/react'
 import sabtaLogo from '../assets/icons/sabta-logo.png'
 import '../css/AdminLayout.css'
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { path: '/admin/users', label: 'Players', icon: UsersIcon },
   { path: '/admin/analytics', label: 'Analytics', icon: ChartLineUpIcon },
   { path: '/admin/cosmetics', label: 'Cosmetics', icon: GiftIcon },
+  { path: '/admin/clan-wars', label: 'Clan Wars', icon: FlagIcon },  // ← NEW
   { path: '/admin/badges', label: 'Badges', icon: MedalIcon },
   { path: '/admin/announcements', label: 'Announcements', icon: MegaphoneIcon },
 ]
@@ -171,7 +173,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-1 overflow-y-auto admin-custom-scrollbar">
           {NAV_ITEMS.map((item) => {
             const isActive = location.pathname.startsWith(item.path)
             const Icon = item.icon
@@ -255,7 +257,7 @@ export default function AdminLayout() {
         <>
           <div className="fixed inset-0 z-[100] bg-black/20 sm:hidden" onClick={() => setShowNotifications(false)} />
           
-          <div className="fixed top-16 right-4 sm:top-20 sm:right-8 w-72 sm:w-80 bg-[#0f1014] border border-white/10 rounded-2xl shadow-2xl z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="fixed top-16 right-3 left-3 sm:left-auto sm:right-8 sm:w-80 w-auto bg-[#0f1014] border border-white/10 rounded-2xl shadow-2xl z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">Notifications</h3>
               <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-white">
@@ -307,8 +309,8 @@ export default function AdminLayout() {
         document.body
       )}
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex justify-around items-center h-16 z-40 px-1 pb-safe">
+      {/* MOBILE BOTTOM NAVIGATION BAR — scrollable for 8 items */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0a0b0f]/95 backdrop-blur-md border-t border-white/10 flex items-center h-16 z-40 px-1 pb-safe overflow-x-auto admin-custom-scrollbar scroll-smooth">
         {NAV_ITEMS.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
           const Icon = item.icon
@@ -316,12 +318,14 @@ export default function AdminLayout() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center justify-center gap-1 w-full py-1 transition-all ${isActive ? 'text-[#ccff00] -translate-y-1' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] py-1 transition-all shrink-0 ${
+                isActive ? 'text-[#ccff00]' : 'text-gray-500 hover:text-gray-300'
+              }`}
             >
-              <div className={`p-1 rounded-xl transition ${isActive ? 'bg-[#ccff00]/10' : 'bg-transparent'}`}>
+              <div className={`p-1 rounded-lg transition ${isActive ? 'bg-[#ccff00]/10' : 'bg-transparent'}`}>
                 <Icon weight={isActive ? 'fill' : 'duotone'} size={18} />
               </div>
-              <span className="text-[8px] font-bold tracking-wider">{item.label}</span>
+              <span className="text-[8px] font-bold tracking-wider whitespace-nowrap leading-none">{item.label}</span>
             </button>
           )
         })}

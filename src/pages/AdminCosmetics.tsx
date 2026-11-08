@@ -98,6 +98,15 @@ export default function AdminCosmetics() {
     other: { label: 'Other Items', icon: GiftIcon, color: 'text-gray-400' }
   };
 
+  // ✅ Helper to check media type for the grid display
+  const getPreviewKind = (url: string) => {
+    if (!url) return null;
+    const lower = url.split('?')[0].toLowerCase();
+    if (/\.(mp4|webm|ogv|mov|mkv)$/.test(lower)) return 'video';
+    if (/\.(mp3|wav|ogg|m4a)$/.test(lower)) return 'audio';
+    return 'image';
+  }
+
   return (
     <div className="max-w-7xl mx-auto admin-page-enter">
       
@@ -186,6 +195,9 @@ export default function AdminCosmetics() {
                       : isRare ? 'hover:border-[#00f0ff]/50 hover:shadow-[0_0_30px_rgba(0,240,255,0.2)]' 
                       : 'hover:border-white/30'
 
+                    // ✅ Determine if it's video, image, or audio
+                    const previewKind = getPreviewKind(item.preview_url);
+
                     return (
                       <div key={item.id} className={`bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-3xl overflow-hidden group transition-all duration-300 flex flex-col ${borderHover}`}>
                         
@@ -196,15 +208,28 @@ export default function AdminCosmetics() {
                           }`} />
                           
                           {item.preview_url ? (
-                            <img 
-                              src={item.preview_url} 
-                              alt={item.name} 
-                              className="w-full h-full object-contain p-2 relative z-10"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.parentElement?.classList.add('image-error');
-                              }}
-                            />
+                            previewKind === 'video' ? (
+                              <video 
+                                src={item.preview_url} 
+                                className="w-full h-full object-cover relative z-10"
+                                autoPlay loop muted playsInline
+                              />
+                            ) : previewKind === 'audio' ? (
+                              <div className="flex flex-col items-center justify-center relative z-10 text-[#ff00a0]">
+                                <ImageIcon size={24} className="mb-1" />
+                                <span className="text-[10px] font-bold text-white">Audio</span>
+                              </div>
+                            ) : (
+                              <img 
+                                src={item.preview_url} 
+                                alt={item.name} 
+                                className="w-full h-full object-contain p-2 relative z-10"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.parentElement?.classList.add('image-error');
+                                }}
+                              />
+                            )
                           ) : (
                             <ImageIcon weight="duotone" className="w-8 h-8 sm:w-10 sm:h-10 text-gray-600 relative z-10" />
                           )}

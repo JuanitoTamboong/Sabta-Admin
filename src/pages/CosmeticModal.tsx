@@ -14,6 +14,130 @@ interface CosmeticModalProps {
   onSaveSuccess: () => void
 }
 
+// ─────────────────────────────────────────────────────────────
+// Type tables
+// ─────────────────────────────────────────────────────────────
+const ACCEPTED_IMAGE_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'image/svg+xml', 'image/avif', 'image/bmp', 'image/tiff',
+]
+const ACCEPTED_VIDEO_TYPES = [
+  'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-matroska',
+]
+const ACCEPTED_AUDIO_TYPES = [
+  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
+]
+const ACCEPTED_TYPES = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_VIDEO_TYPES, ...ACCEPTED_AUDIO_TYPES]
+
+// ─────────────────────────────────────────────────────────────
+// Compression targets (Only for images now)
+// ─────────────────────────────────────────────────────────────
+const IMAGE_TARGET_BYTES = 1.5 * 1024 * 1024
+const IMAGE_MAX_DIMENSION = 1920
+const IMAGE_MIN_QUALITY = 0.55
+const IMAGE_START_QUALITY = 0.9
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+const isImage = (t: string) => ACCEPTED_IMAGE_TYPES.includes(t)
+const isVideo = (t: string) => ACCEPTED_VIDEO_TYPES.includes(t)
+const isAudio = (t: string) => ACCEPTED_AUDIO_TYPES.includes(t)
+const isSvg = (t: string) => t === 'image/svg+xml'
+const isGif = (t: string) => t === 'image/gif'
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e) }
+    img.src = url
+  })
+}
+
+async function compressImage(file: File): Promise<File> {
+  if (isSvg(file.type) || isGif(file.type)) return file
+
+  const img = await loadImage(file)
+  const { width, height } = img
+  const longest = Math.max(width, height)
+  const scale = longest > IMAGE_MAX_DIMENSION ? IMAGE_MAX_DIMENSION / longest : 1
+  const targetW = Math.round(width * scale)
+  const targetH = Math.round(height * scale)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetW
+  canvas.height = targetH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return file
+  ctx.drawImage(img, 0, 0, targetW, targetH)
+
+  const supportsWebp = canvas.toDataURL('image/webp').startsWith('data:image/webp')
+  const outType = supportsWebp ? 'image/webp' : 'image/jpeg'
+  const outExt = supportsWebp ? 'webp' : 'jpg'
+
+  let quality = IMAGE_START_QUALITY
+  let blob: Blob | null = null
+  while (quality >= IMAGE_MIN_QUALITY) {
+    blob = await new Promise<Blob | null>((res) => canvas.toBlob((b) => res(b), outType, quality))
+    if (blob && blob.size <= IMAGE_TARGET_BYTES) break
+    quality -= 0.1
+  }
+  if (!blob) return file
+  if (blob.size >= file.size) return file
+
+  const baseName = file.name.replace(/\.[^.]+$/, '')
+  return new File([blob], `${baseName}.${outExt}`, { type: outType })
+}
+
+// ✅ The new simple dispatcher
+async function processFile(
+  file: File,
+  onProgress?: (pct: number, stage: string) => void
+): Promise<File> {
+  
+  // 1. SVGs & GIFs: Instant bypass (No compression needed)
+  if (isSvg(file.type) || isGif(file.type)) {
+    onProgress?.(100, 'Ready')
+    return file
+  }
+
+  // 2. Images: Compress natively
+  if (isImage(file.type)) {
+    onProgress?.(20, 'Compressing image…')
+    const out = await compressImage(file)
+    onProgress?.(100, 'Done')
+    return out
+  }
+
+  // 3. Videos & Audio: Instant bypass (Since ffmpeg was causing the freeze)
+  if (isVideo(file.type) || isAudio(file.type)) {
+    onProgress?.(50, 'Checking file...')
+    
+    // Safety cap to prevent huge uploads
+    if (file.size > 15 * 1024 * 1024) {
+      throw new Error("Video/Audio is too large (max 15MB). Please compress it manually.")
+    }
+
+    // Fake a quick delay for UI smoothness
+    await new Promise(r => setTimeout(r, 600))
+    onProgress?.(100, 'Done')
+    return file
+  }
+
+  return file
+}
+
+// ─────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────
 export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSuccess }: CosmeticModalProps) {
   const [saving, setSaving] = useState(false)
   const [uploadError, setUploadError] = useState(false)
@@ -21,9 +145,15 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
 
   const [originalUrl, setOriginalUrl] = useState<string>('')
 
-  // ✅ NEW: pending file + local preview (nothing uploaded until Save)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingKind, setPendingKind] = useState<'image' | 'video' | 'audio' | null>(null)
   const [localPreview, setLocalPreview] = useState<string>('')
+
+  const [compressing, setCompressing] = useState(false)
+  const [compressProgress, setCompressProgress] = useState(0)
+  const [compressStage, setCompressStage] = useState('')
+  const [originalSize, setOriginalSize] = useState<number>(0)
+  const [compressedSize, setCompressedSize] = useState<number>(0)
 
   const [formData, setFormData] = useState<{
     name: string;
@@ -45,22 +175,23 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
 
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
-  // ✅ Revoke object URL on unmount / when it changes
   useEffect(() => {
-    return () => {
-      if (localPreview) URL.revokeObjectURL(localPreview)
-    }
+    return () => { if (localPreview) URL.revokeObjectURL(localPreview) }
   }, [localPreview])
 
-  // ✅ Reset state every time the modal opens
   useEffect(() => {
     if (isOpen) {
-      // clear any leftover local preview
       if (localPreview) URL.revokeObjectURL(localPreview)
       setLocalPreview('')
       setPendingFile(null)
+      setPendingKind(null)
       setUploadError(false)
       setToast(null)
+      setCompressing(false)
+      setCompressProgress(0)
+      setCompressStage('')
+      setOriginalSize(0)
+      setCompressedSize(0)
 
       if (editingItem) {
         setFormData({
@@ -84,52 +215,98 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingItem])
 
-  // ✅ Cancel = nothing to clean up in storage (nothing was uploaded)
   const handleClose = () => {
     if (localPreview) URL.revokeObjectURL(localPreview)
     setLocalPreview('')
     setPendingFile(null)
+    setPendingKind(null)
+    setCompressing(false)
     onClose()
   }
 
   if (!isOpen) return null
 
-  // ✅ Only validate + create a local preview. NO network call here.
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
-      setToast({ type: 'error', msg: 'Only JPG, PNG, GIF, and WebP are allowed.' })
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setToast({ type: 'error', msg: 'File must be under 5MB.' })
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setToast({
+        type: 'error',
+        msg: 'Unsupported file type. Allowed: JPG, PNG, GIF, WebP, SVG, AVIF, MP4, WebM, OGG, MOV, MP3, WAV.'
+      })
       if (fileInputRef.current) fileInputRef.current.value = ''
       return
     }
 
-    // revoke previous object URL to avoid memory leak
+    // Hard caps for raw files
+    const hardCap = isVideo(file.type) ? 50 * 1024 * 1024
+      : isAudio(file.type) ? 50 * 1024 * 1024
+      : 50 * 1024 * 1024
+    if (file.size > hardCap) {
+      setToast({ type: 'error', msg: `File too large to process (max ${formatBytes(hardCap)}).` })
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     if (localPreview) URL.revokeObjectURL(localPreview)
-
-    const objectUrl = URL.createObjectURL(file)
-    setPendingFile(file)
-    setLocalPreview(objectUrl)
+    setLocalPreview('')
+    setPendingFile(null)
+    setPendingKind(null)
     setUploadError(false)
     setToast(null)
+    setOriginalSize(file.size)
+    setCompressedSize(0)
+    setCompressing(true)
+    setCompressProgress(0)
+    setCompressStage('Preparing…')
 
-    if (fileInputRef.current) fileInputRef.current.value = ''
+    try {
+      const processed = await processFile(file, (pct, stage) => {
+        setCompressProgress(pct)
+        setCompressStage(stage)
+      })
+
+      const kind: 'image' | 'video' | 'audio' =
+        isVideo(processed.type) ? 'video'
+        : isAudio(processed.type) ? 'audio'
+        : 'image'
+
+      const objectUrl = URL.createObjectURL(processed)
+      setPendingFile(processed)
+      setPendingKind(kind)
+      setLocalPreview(objectUrl)
+      setCompressedSize(processed.size)
+
+      const saved = file.size - processed.size
+      if (saved > 0 && processed.size < file.size) {
+        setToast({
+          type: 'success',
+          msg: `Compressed: ${formatBytes(file.size)} → ${formatBytes(processed.size)} (saved ${formatBytes(saved)})`
+        })
+      } else if (processed.size >= file.size) {
+        setToast({ type: 'success', msg: `File ready (${formatBytes(processed.size)})` })
+      }
+    } catch (err: any) {
+      console.error('Processing error:', err)
+      setToast({ type: 'error', msg: `File error: ${err.message}` })
+      setUploadError(true)
+    } finally {
+      setCompressing(false)
+      setCompressProgress(0)
+      setCompressStage('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (compressing) return
     setSaving(true)
 
     let uploadedPath: string | null = null
 
     try {
-      // ✅ 1. Upload the new file (only now, on Save)
       let finalPreviewUrl = formData.preview_url
 
       if (pendingFile) {
@@ -161,7 +338,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
         status: formData.status
       }
 
-      // ✅ 2. Write DB row
       if (editingItem) {
         const { error } = await supabase.from('cosmetic_items').update(payload).eq('id', editingItem.id)
         if (error) throw error
@@ -172,7 +348,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
         setToast({ type: 'success', msg: 'Item created successfully!' })
       }
 
-      // ✅ 3. Only AFTER the DB write succeeds, delete the old image (if replaced)
       if (editingItem && pendingFile && originalUrl && originalUrl.includes('/cosmetics/')) {
         const oldFilePath = originalUrl.split('/cosmetics/')[1]
         if (oldFilePath) {
@@ -180,10 +355,10 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
         }
       }
 
-      // revoke the local preview now that we're leaving
       if (localPreview) URL.revokeObjectURL(localPreview)
       setLocalPreview('')
       setPendingFile(null)
+      setPendingKind(null)
 
       setTimeout(() => {
         onSaveSuccess()
@@ -193,7 +368,6 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
       console.error('Save error:', err)
       setToast({ type: 'error', msg: err.message })
 
-      // ✅ If we uploaded a file but the DB write failed, remove the orphan
       if (uploadedPath) {
         try {
           await supabase.storage.from('cosmetics').remove([uploadedPath])
@@ -206,17 +380,15 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
     }
   }
 
-  // ✅ Recommended size helper
   const getRecommendedSize = () => {
     switch (formData.cosmetic_type) {
-      case 'background': return '1920x1080 (16:9 Landscape)'
-      case 'avatar_border': return '1000x1000 (1:1 Square with transparency)'
-      case 'quiz_theme': return '1920x1080 (16:9 Background)'
-      default: return ''
+      case 'background': return '1920x1080 · PNG/JPG/SVG/MP4/WebM'
+      case 'avatar_border': return '1000x1000 transparent · PNG/SVG/GIF'
+      case 'quiz_theme': return '1920x1080 · PNG/JPG/SVG/MP4'
+      default: return 'Any'
     }
   }
 
-  // ✅ Preview styling helper
   const getPreviewClass = () => {
     switch (formData.cosmetic_type) {
       case 'avatar_border': return 'object-contain p-4'
@@ -226,15 +398,23 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
     }
   }
 
-  // ✅ What to show in the dropzone: local preview wins, then existing URL
   const previewSrc = localPreview || formData.preview_url
+
+  const previewKind: 'image' | 'video' | 'audio' | null = (() => {
+    if (pendingKind) return pendingKind
+    if (!previewSrc) return null
+    const lower = previewSrc.split('?')[0].toLowerCase()
+    if (/\.(mp4|webm|ogv|mov|mkv)$/.test(lower)) return 'video'
+    if (/\.(mp3|wav|ogg|m4a)$/.test(lower)) return 'audio'
+    if (/\.(jpg|jpeg|png|gif|webp|svg|avif|bmp|tiff)$/.test(lower)) return 'image'
+    return 'image'
+  })()
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-8">
 
       <div className="bg-[#0f1014] border border-white/10 rounded-2xl sm:rounded-[2rem] w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden relative">
 
-        {/* HEADER */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-white/10 bg-[#0f1014] z-10 shrink-0">
           <h2 className="text-base sm:text-xl font-bold flex items-center gap-2 sm:gap-3 text-white">
             <SparkleIcon className="text-[#ff00a0] sm:w-6 sm:h-6" size={20} />
@@ -245,11 +425,9 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
           </button>
         </div>
 
-        {/* SCROLLABLE BODY */}
         <div className="p-4 sm:p-6 md:p-8 overflow-y-auto admin-custom-scrollbar flex-1">
           <form id="cosmetic-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8">
 
-            {/* LEFT COLUMN: Inputs */}
             <div className="space-y-4 sm:space-y-5">
               <div>
                 <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 sm:mb-2 block">Item Name</label>
@@ -286,18 +464,7 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                   <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 sm:mb-2 block">Price (Coins)</label>
                   <div className="relative">
                     <CoinsIcon className="absolute left-2.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#ff00a0] w-4 h-4 sm:w-5 sm:h-5" />
-                    <input
-                      required
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={formData.price}
-                      onChange={e => {
-                        const numericValue = e.target.value.replace(/[^0-9]/g, '');
-                        setFormData({...formData, price: numericValue});
-                      }}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl pl-8 sm:pl-12 pr-2 sm:pr-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-[#ff00a0] font-bold text-xs sm:text-sm"
-                    />
+                    <input required type="text" inputMode="numeric" pattern="[0-9]*" value={formData.price} onChange={e => { const numericValue = e.target.value.replace(/[^0-9]/g, ''); setFormData({...formData, price: numericValue}); }} className="w-full bg-black/50 border border-white/10 rounded-lg sm:rounded-xl pl-8 sm:pl-12 pr-2 sm:pr-4 py-2.5 sm:py-3.5 focus:border-[#ff00a0] outline-none transition text-[#ff00a0] font-bold text-xs sm:text-sm" />
                   </div>
                 </div>
                 <div>
@@ -310,36 +477,83 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
               </div>
             </div>
 
-            {/* RIGHT COLUMN: Image Upload */}
             <div className="flex flex-col h-full mt-2 md:mt-0">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 sm:mb-2 gap-1">
-                <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider block">Item Image</label>
+                <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider block">Item Media</label>
                 <span className="text-[9px] sm:text-[10px] text-[#ccff00] font-semibold bg-[#ccff00]/10 px-2 py-0.5 rounded border border-[#ccff00]/20">
-                  Required: {getRecommendedSize()}
+                  {getRecommendedSize()}
                 </span>
               </div>
 
-              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" id="image-upload" />
+              <input
+                type="file"
+                accept={[
+                  ...ACCEPTED_IMAGE_TYPES,
+                  ...ACCEPTED_VIDEO_TYPES,
+                  ...ACCEPTED_AUDIO_TYPES,
+                  '.svg', '.mp4', '.webm', '.mov', '.mkv', '.mp3', '.wav', '.ogg',
+                ].join(',')}
+                ref={fileInputRef}
+                onChange={handleImageUpload}
+                className="hidden"
+                id="image-upload"
+                disabled={compressing || saving}
+              />
 
               <label
                 htmlFor="image-upload"
                 className={`cursor-pointer flex flex-col items-center justify-center w-full flex-1 min-h-[160px] sm:min-h-[250px] border-2 border-dashed rounded-xl sm:rounded-2xl transition-all relative overflow-hidden ${
-                  saving ? 'border-gray-700 bg-gray-800/20 text-gray-500 cursor-not-allowed'
+                  (saving || compressing) ? 'border-gray-700 bg-gray-800/20 text-gray-500 cursor-not-allowed'
                   : previewSrc && !uploadError ? 'border-[#ff00a0]/30 bg-[#ff00a0]/5'
                   : uploadError ? 'border-red-500/50 bg-red-500/5'
                   : 'border-white/20 bg-black/30 hover:bg-white/5 hover:border-[#ff00a0]/50'
                 }`}
               >
-                {previewSrc && !uploadError ? (
-                  <>
-                    <img src={previewSrc} alt="Preview" className={`absolute inset-0 w-full h-full ${getPreviewClass()}`} />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity z-10">
-                      <p className="text-white font-bold text-xs sm:text-sm bg-black/60 px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl backdrop-blur-md border border-white/20">Change Image</p>
+                {compressing ? (
+                  <div className="flex flex-col items-center justify-center w-full p-6 text-center">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#ff00a0]/20 flex items-center justify-center mb-3">
+                      <SparkleIcon size={28} className="text-[#ff00a0] animate-pulse" />
                     </div>
-                    {/* badge showing a file is staged but not yet saved */}
+                    <p className="text-xs sm:text-sm font-bold text-white mb-2">{compressStage || 'Preparing…'}</p>
+                    <div className="w-full max-w-[200px] h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#ff00a0] transition-all duration-200"
+                        style={{ width: `${compressProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5">{compressProgress}%</p>
+                  </div>
+                ) : previewSrc && !uploadError ? (
+                  <>
+                    {previewKind === 'video' ? (
+                      <video src={previewSrc} className={`absolute inset-0 w-full h-full ${getPreviewClass()}`} autoPlay loop muted playsInline />
+                    ) : previewKind === 'audio' ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 p-4">
+                        <ImageIcon size={32} className="text-[#ff00a0] mb-3" />
+                        <audio src={previewSrc} controls className="w-full max-w-xs" />
+                      </div>
+                    ) : (
+                      <img src={previewSrc} alt="Preview" className={`absolute inset-0 w-full h-full ${getPreviewClass()}`} />
+                    )}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity z-10">
+                      <p className="text-white font-bold text-xs sm:text-sm bg-black/60 px-3 sm:px-4 py-2 rounded-lg sm:rounded-xl backdrop-blur-md border border-white/20">Change Media</p>
+                    </div>
                     {pendingFile && (
                       <div className="absolute top-2 left-2 z-20 text-[9px] sm:text-[10px] font-bold bg-[#ccff00] text-black px-2 py-0.5 rounded">
                         Not saved yet
+                      </div>
+                    )}
+                    {previewKind && (
+                      <div className="absolute top-2 right-2 z-20 text-[9px] sm:text-[10px] font-bold bg-black/70 text-white px-2 py-0.5 rounded uppercase tracking-wider border border-white/20">
+                        {previewKind}
+                      </div>
+                    )}
+                    {compressedSize > 0 && (
+                      <div className="absolute bottom-2 left-2 right-2 z-20 text-[9px] sm:text-[10px] font-bold bg-black/70 text-white px-2 py-1 rounded flex items-center justify-between gap-2">
+                        <span className="text-[#ccff00]">{formatBytes(compressedSize)}</span>
+                        {originalSize > compressedSize && (
+                          <span className="text-gray-400 line-through">{formatBytes(originalSize)}</span>
+                        )}
                       </div>
                     )}
                   </>
@@ -349,7 +563,7 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
                       {saving ? <UploadSimpleIcon size={20} className="animate-bounce text-[#ff00a0] sm:w-7 sm:h-7" /> : uploadError ? <WarningCircleIcon size={20} className="sm:w-7 sm:h-7" /> : <ImageIcon size={20} className="sm:w-7 sm:h-7" />}
                     </div>
                     <p className="text-xs sm:text-sm font-bold text-white mb-0.5 sm:mb-1">{saving ? 'Uploading...' : uploadError ? 'Upload Failed' : 'Click to upload'}</p>
-                    <p className="text-[9px] sm:text-[10px] text-gray-500">PNG, JPG, GIF, WEBP up to 5MB</p>
+                    <p className="text-[9px] sm:text-[10px] text-gray-500">PNG, JPG, GIF, WEBP, SVG, MP4, WebM · auto-compressed before upload</p>
                   </div>
                 )}
               </label>
@@ -357,16 +571,14 @@ export default function CosmeticModal({ isOpen, onClose, editingItem, onSaveSucc
           </form>
         </div>
 
-        {/* STICKY FOOTER */}
         <div className="p-3 sm:p-6 border-t border-white/10 bg-[#0f1014] flex justify-end gap-2 sm:gap-3 shrink-0 z-10">
           <button type="button" onClick={handleClose} className="px-4 sm:px-6 py-2 sm:py-3 bg-white/5 hover:bg-white/10 rounded-lg sm:rounded-xl font-bold transition text-gray-300 text-xs sm:text-sm">Cancel</button>
-          <button type="submit" form="cosmetic-form" disabled={saving} className="px-5 sm:px-8 py-2 sm:py-3 bg-[#ccff00] text-black hover:bg-white rounded-lg sm:rounded-xl font-bold transition disabled:opacity-50 shadow-[0_0_15px_rgba(204,255,0,0.2)] text-xs sm:text-sm">
-            {saving ? 'Saving...' : 'Save Item'}
+          <button type="submit" form="cosmetic-form" disabled={saving || compressing} className="px-5 sm:px-8 py-2 sm:py-3 bg-[#ccff00] text-black hover:bg-white rounded-lg sm:rounded-xl font-bold transition disabled:opacity-50 shadow-[0_0_15px_rgba(204,255,0,0.2)] text-xs sm:text-sm">
+            {saving ? 'Saving…' : compressing ? 'Processing…' : 'Save Item'}
           </button>
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div className={`absolute top-8 left-1/2 -translate-x-1/2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-bold text-xs sm:text-sm shadow-2xl border flex items-center gap-2 bg-[#0f1014] z-[10000] ${
           toast.type === 'success' ? 'border-green-500/30 text-green-400' : 'border-red-500/30 text-red-400'

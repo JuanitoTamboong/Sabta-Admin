@@ -7,7 +7,7 @@ import {
   ArrowUpRightIcon, CaretRightIcon,
   CheckCircleIcon, PlusIcon, ChartBarIcon,
   CoinsIcon, ShieldCheckIcon, PulseIcon, ShoppingBagIcon,
-  ArrowRightIcon
+  ArrowRightIcon, SwordIcon  // ← NEW
 } from '@phosphor-icons/react'
 
 export default function AdminDashboard() {
@@ -318,6 +318,17 @@ export default function AdminDashboard() {
                     <UsersIcon weight="fill" className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   <span className="text-xs sm:text-sm font-bold">Manage Players</span>
+                </div>
+                <ArrowRightIcon weight="bold" className="text-gray-500 group-hover:text-white transition w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+
+              {/* ← NEW: Clan Wars quick action */}
+              <button onClick={() => navigate('/admin/clan-wars')} className="w-full flex items-center justify-between p-3 sm:p-4 bg-[#0f1014] sm:bg-black/40 hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-xl sm:rounded-2xl transition group">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#ccff00]/10 text-[#ccff00] flex items-center justify-center">
+                    <SwordIcon weight="fill" className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold">Clan Wars</span>
                 </div>
                 <ArrowRightIcon weight="bold" className="text-gray-500 group-hover:text-white transition w-4 h-4 sm:w-5 sm:h-5" />
               </button>

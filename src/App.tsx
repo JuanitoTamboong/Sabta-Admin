@@ -1,12 +1,16 @@
 // src/App.tsx
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-
 import AdminApp from './AdminApp'
 
+// 1. Check if running in Electron
+const isElectron = typeof window !== 'undefined' && (window as any).desktop?.isElectron;
+
+// 2. Automatically pick the correct router
+const Router = isElectron ? HashRouter : BrowserRouter;
+
 function App() {
-  // ✅ FIXED: Removed the unused 'session' variable to fix the Vercel build error
   const [, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -32,12 +36,12 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="/*" element={<AdminApp />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   )
 }
 

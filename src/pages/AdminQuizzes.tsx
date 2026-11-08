@@ -58,6 +58,9 @@ const getNextLocalMinute = () => {
   return toLocalDateTimeInputValue(date.toISOString())
 }
 
+// 🔥 HELPER: Strip ALL backslashes from a string
+const cleanText = (text: string) => text.replace(/\\/g, '').trim()
+
 function QuizPublishingOptions({
   mode,
   scheduledAt,
@@ -318,15 +321,16 @@ export default function AdminQuizzes() {
     const finalCategory = category.trim() || 'General Knowledge'
     const autoTitle = `Quiz 1: ${manualQuizTitle.trim()}`
     const questionsToPublish = manualQuestions.map(question => {
-      const questionText = question.questionText.trim()
-      const options = question.options.map(option => option.trim())
-      const correctAnswer = question.correctAnswer.trim()
+      // 🔥 FIX: Strip ALL backslashes from the manual inputs
+      const questionText = cleanText(question.questionText)
+      const options = question.options.map(option => cleanText(option))
+      const correctAnswer = cleanText(question.correctAnswer)
 
       return {
         question_text: questionText,
         options,
         correct_answer: correctAnswer,
-        hint: question.hint.trim() || null,
+        hint: question.hint ? cleanText(question.hint) : null,
         qHash: generateHash(`${questionText}|${[...options].sort().join('|')}`)
       }
     })
@@ -432,7 +436,8 @@ export default function AdminQuizzes() {
         return null
       }
 
-      const allLines = text.replace(/\r\n?/g, '\n').split('\n')
+      // 🔥 FIX: Strip ALL backslashes from the entire file text BEFORE parsing
+      const allLines = text.replace(/\\/g, '').replace(/\r\n?/g, '\n').split('\n')
       const quizBlocks: string[][] = []
       let currentQuizLines: string[] = []
       let insideCodeFence = false
@@ -545,9 +550,9 @@ export default function AdminQuizzes() {
             if (startsCodeFence) inQuestionCodeFence = !inQuestionCodeFence
           }
 
-          const question_text = questionTextLines.join('\n').trim()
-          const options = optionLines.map(option => option.join('\n').trim())
-          const hint = hintLines.join('\n').trim() || null
+          const question_text = cleanText(questionTextLines.join('\n'))
+          const options = optionLines.map(option => cleanText(option.join('\n')))
+          const hint = cleanText(hintLines.join('\n')) || null
           
           const letterIndex = answerLetter.charCodeAt(0) - 65 
           const correct_answer = options[letterIndex] || ''
@@ -1354,7 +1359,8 @@ export default function AdminQuizzes() {
                 <div className="relative">
                   <textarea
                     value={pastedText}
-                    onChange={(e) => setPastedText(e.target.value)}
+                    // 🔥 FIX: Instantly strip backslashes from pasted text
+                    onChange={(e) => setPastedText(e.target.value.replace(/\\/g, ''))}
                     placeholder="Paste your quiz text here (same format as below)..."
                     className="w-full h-[150px] bg-black/50 border-2 border-[#ff00a0]/30 focus:border-[#ff00a0] rounded-xl p-4 text-white text-xs font-mono outline-none transition-colors resize-none admin-custom-scrollbar"
                   />
