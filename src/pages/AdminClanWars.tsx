@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   FlagIcon, TrophyIcon, XIcon, CheckCircleIcon, WarningCircleIcon,
-  PlusIcon, ArrowsClockwiseIcon, LightningIcon,
-  EyeIcon, ClockIcon, SwordIcon, UsersIcon, TrashIcon, UploadSimpleIcon,
-  FileTextIcon, XCircleIcon, PencilIcon, PlayIcon
+  PlusIcon, ArrowsClockwiseIcon,
+  EyeIcon, SwordIcon, UsersIcon, TrashIcon, UploadSimpleIcon,
+  PlayIcon
 } from '@phosphor-icons/react'
 
 type Toast = { type: 'success' | 'error'; msg: string } | null
