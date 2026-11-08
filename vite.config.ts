@@ -1,15 +1,14 @@
-
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// https://vite.dev/config/
 export default defineConfig({
-  base: './',
-
+  // '/' is standard for web (Vercel). 
+  // We only use './' if a specific Electron build script triggers it.
+  base: process.env.IS_ELECTRON === 'true' ? './' : '/',
+  
   plugins: [react()],
-
+  
   resolve: {
-    // This forces Vite to use only ONE copy of React
     dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
   },
 })
